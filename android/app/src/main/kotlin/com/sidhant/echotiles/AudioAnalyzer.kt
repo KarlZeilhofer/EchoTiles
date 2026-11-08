@@ -17,7 +17,7 @@ class AudioAnalyzer(private val context: Context) {
         var decoder: MediaCodec? = null
         try {
             when {
-                path.startsWith("assets/") -> context.assets.openFd("flutter_assets/$path").use {
+                path.startsWith("assets/") -> context.assets.openFd("flutter_assets/${Uri.encode(path, "/")}").use {
                     extractor.setDataSource(it.fileDescriptor, it.startOffset, it.length)
                 }
                 path.startsWith("content://") -> extractor.setDataSource(context, Uri.parse(path), null)
