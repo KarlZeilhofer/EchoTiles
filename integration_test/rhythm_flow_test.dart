@@ -9,6 +9,7 @@ import 'package:integration_test/integration_test.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:echotiles/main.dart';
 import 'package:echotiles/models/game_models.dart';
+import 'package:echotiles/models/rhythm_timeline.dart';
 import 'package:echotiles/models/app_theme.dart';
 import 'package:echotiles/l10n/app_localizations.dart';
 import 'package:echotiles/screens/game_screen.dart';
@@ -103,7 +104,7 @@ void main() {
     await tester.tapAt(
       Offset(
         gameSize.width * (clicks.notes.first.lane + 0.5) / 4,
-        gameSize.height * 0.8,
+        gameSize.height * RhythmTimeline.targetLineFactor,
       ),
     );
     await tester.pump();
@@ -123,7 +124,10 @@ void main() {
         await Future<void>.delayed(const Duration(milliseconds: 20));
       }
       await tester.tapAt(
-        Offset(gameSize.width * (note.lane + 0.5) / 4, gameSize.height * 0.8),
+        Offset(
+          gameSize.width * (note.lane + 0.5) / 4,
+          gameSize.height * RhythmTimeline.targetLineFactor,
+        ),
       );
       await tester.pump();
     }
@@ -176,7 +180,7 @@ void main() {
     await tester.tapAt(
       Offset(
         size.width * (analysis.notes.first.lane + 0.5) / 4,
-        size.height * 0.7,
+        size.height * RhythmTimeline.targetLineFactor,
       ),
     );
     await tester.pump();

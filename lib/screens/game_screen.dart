@@ -33,7 +33,7 @@ class GameScreen extends StatefulWidget {
 
 class _GameScreenState extends State<GameScreen>
     with SingleTickerProviderStateMixin, WidgetsBindingObserver {
-  static const double _targetLineFactor = 0.80;
+  static const double _targetLineFactor = RhythmTimeline.targetLineFactor;
   static const double _tileHeightFactor = 0.20;
   late Ticker _ticker;
   final Stopwatch _monotonic = Stopwatch();

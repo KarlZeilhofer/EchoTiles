@@ -11,14 +11,14 @@ void main() {
     for (var time = 0.0; time <= duration; time += 5) {
       final speed = RhythmTimeline.speed(time, duration);
       expect(speed, greaterThan(previous));
-      expect(RhythmTimeline.position(time, time, duration), 0.8);
+      expect(RhythmTimeline.position(time, time, duration), 0.55);
       expect(
         RhythmTimeline.position(time + 0.2, time, duration),
-        lessThan(0.8),
+        lessThan(0.55),
       );
       expect(
         RhythmTimeline.position(time - 0.2, time, duration),
-        greaterThan(0.8),
+        greaterThan(0.55),
       );
       previous = speed;
     }

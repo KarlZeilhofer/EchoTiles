@@ -30,7 +30,8 @@ Re-analysis is available through the same button. Analysis can be cancelled.
   audio timestamps; the audio itself is not sped up. Sparse passages stay sparse.
 - This mode uses single-tap notes rather than randomly generated holds/chords.
   PERFECT/ GREAT/ GOOD timing windows are 50/100/220 ms. The tile's center mark
-  crosses the judgment line at the onset. Touch hardware timestamps compensate
+  crosses the judgment line at the onset. The line sits at 55% of playfield
+  height from the top (45% from the bottom), shared by rendering and timing. Touch hardware timestamps compensate
   up to 120 ms of input dispatch delay; misses wait for that grace period.
   A small lane-edge tolerance and 80 ms same-lane bounce suppression prevent
   accidental extra failures.
