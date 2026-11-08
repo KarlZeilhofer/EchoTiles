@@ -1,10 +1,13 @@
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../l10n/app_localizations.dart';
 import '../models/app_theme.dart';
 import '../models/game_models.dart';
+import '../models/song_analysis.dart';
+import '../services/analysis_service.dart';
 import '../services/audio_service.dart';
 import '../services/haptics.dart';
 import '../services/song_catalog.dart';
@@ -32,6 +35,8 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   int _currentIndex = 0;
   List<SongItem> _songs = const [];
+  final Map<String, SongAnalysis> _analyses = {};
+  bool _busy = false;
 
   @override
   void initState() {
@@ -43,6 +48,13 @@ class _HomeScreenState extends State<HomeScreen> {
     setState(() {
       _songs = SongCatalog.getSongs();
     });
+    for (final song in _songs) {
+      AnalysisService.instance.load(song).then((analysis) {
+        if (mounted && analysis != null) {
+          setState(() => _analyses[song.id] = analysis);
+        }
+      });
+    }
   }
 
   Future<void> _openUrl(String urlString) async {
@@ -52,14 +64,101 @@ class _HomeScreenState extends State<HomeScreen> {
     } catch (_) {}
   }
 
+  Future<SongAnalysis?> _analyzeSong(SongItem song) async {
+    if (_busy) return null;
+    setState(() => _busy = true);
+    final l10n = AppLocalizations.of(context);
+    final progress = ValueNotifier<double>(0);
+    var cancelling = false;
+    BuildContext? dialog;
+    AnalysisService.instance.onProgress = (value) => progress.value = value;
+    showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) {
+        dialog = ctx;
+        return PopScope(
+          canPop: false,
+          child: AlertDialog(
+            title: Text(l10n.analyzingSong),
+            content: ValueListenableBuilder<double>(
+              valueListenable: progress,
+              builder: (_, value, _) => Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  LinearProgressIndicator(value: value),
+                  const SizedBox(height: 12),
+                  Text('${(value * 100).round()}%'),
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () {
+                  cancelling = true;
+                  AnalysisService.instance.cancel();
+                },
+                child: Text(l10n.cancel),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+    // Let Flutter build the progress dialog before starting the native worker.
+    await Future<void>.delayed(Duration.zero);
+    SongAnalysis? analysis;
+    Object? error;
+    try {
+      analysis = await AnalysisService.instance.analyze(song);
+      if (mounted && !cancelling) {
+        setState(() => _analyses[song.id] = analysis!);
+      }
+    } catch (e) {
+      if (!(e is PlatformException && e.code == 'CANCELLED')) error = e;
+    } finally {
+      AnalysisService.instance.onProgress = null;
+      if (dialog != null && dialog!.mounted) Navigator.of(dialog!).pop();
+      // The closing route can still paint the notifier during its transition.
+      Future<void>.delayed(const Duration(seconds: 1), progress.dispose);
+      if (mounted) setState(() => _busy = false);
+    }
+    if (mounted && error != null) {
+      final detail = error is PlatformException ? error.message : null;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            '${l10n.analysisFailed}${detail == null ? '' : '\n$detail'}',
+          ),
+          duration: const Duration(seconds: 8),
+        ),
+      );
+    }
+    return cancelling ? null : analysis;
+  }
+
   Future<void> _playSong(SongItem song) async {
+    if (_busy) return;
     Haptics.select();
+    final analysis =
+        _analyses[song.id] ?? await AnalysisService.instance.load(song);
+    if (!mounted) return;
+    if (analysis == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(AppLocalizations.of(context).analysisHint)),
+      );
+      return;
+    }
     await Navigator.of(context).push(
       MaterialPageRoute(
-        builder: (_) => GameScreen(song: song, appTheme: widget.appTheme),
+        builder: (_) => GameScreen(
+          song: song,
+          appTheme: widget.appTheme,
+          analysis: analysis,
+        ),
       ),
     );
-    _loadData();
+    if (mounted) _loadData();
   }
 
   Future<void> _showAddSongDialog() async {
@@ -204,7 +303,9 @@ class _HomeScreenState extends State<HomeScreen> {
                   onPressed: () async {
                     final title = titleController.text.trim();
                     if (title.isEmpty || pickedFilePath == null) return;
-                    final dur = await AudioService.getAudioDuration(pickedFilePath!);
+                    final dur = await AudioService.getAudioDuration(
+                      pickedFilePath!,
+                    );
                     final notesCount = dur != null && dur.inSeconds > 0
                         ? (dur.inSeconds * 2.3).round().clamp(60, 5000)
                         : 160;
@@ -240,19 +341,12 @@ class _HomeScreenState extends State<HomeScreen> {
         onPressed: _showAddSongDialog,
         style: OutlinedButton.styleFrom(
           minimumSize: const Size.fromHeight(54),
-          side: BorderSide(
-            color: theme.playBg,
-            width: 1.8,
-          ),
+          side: BorderSide(color: theme.playBg, width: 1.8),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(16),
           ),
         ),
-        icon: Icon(
-          Icons.add_rounded,
-          color: theme.playBg,
-          size: 24,
-        ),
+        icon: Icon(Icons.add_rounded, color: theme.playBg, size: 24),
         label: Text(
           AppLocalizations.of(context).addYourSong,
           style: TextStyle(
@@ -280,10 +374,7 @@ class _HomeScreenState extends State<HomeScreen> {
         },
         style: OutlinedButton.styleFrom(
           minimumSize: const Size.fromHeight(50),
-          side: BorderSide(
-            color: theme.border,
-            width: 1.5,
-          ),
+          side: BorderSide(color: theme.border, width: 1.5),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(16),
           ),
@@ -481,7 +572,8 @@ class _HomeScreenState extends State<HomeScreen> {
                               vertical: 8,
                             ),
                             itemCount: _songs.length + 1,
-                            separatorBuilder: (_, _) => const SizedBox(height: 14),
+                            separatorBuilder: (_, _) =>
+                                const SizedBox(height: 14),
                             itemBuilder: (context, index) {
                               if (index == _songs.length) {
                                 return Column(
@@ -493,118 +585,152 @@ class _HomeScreenState extends State<HomeScreen> {
                                 );
                               }
                               final song = _songs[index];
-                        return GestureDetector(
-                          onTap: () => _playSong(song),
-                          child: Container(
-                            padding: const EdgeInsets.all(16),
-                            decoration: BoxDecoration(
-                              color: theme.cardBg,
-                              borderRadius: BorderRadius.circular(20),
-                              border: Border.all(
-                                color: theme.border,
-                                width: 1.5,
-                              ),
-                            ),
-                            child: Row(
-                              children: [
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
+                              return GestureDetector(
+                                onTap: () => _playSong(song),
+                                child: Container(
+                                  padding: const EdgeInsets.all(16),
+                                  decoration: BoxDecoration(
+                                    color: theme.cardBg,
+                                    borderRadius: BorderRadius.circular(20),
+                                    border: Border.all(
+                                      color: theme.border,
+                                      width: 1.5,
+                                    ),
+                                  ),
+                                  child: Row(
                                     children: [
-                                      Text(
-                                        song.title,
-                                        style: TextStyle(
-                                          fontFamily: 'Fredoka',
-                                          fontSize: 17,
-                                          fontWeight: FontWeight.w900,
-                                          color: theme.textPrimary,
-                                        ),
-                                      ),
-                                      const SizedBox(height: 2),
-                                      Text(
-                                        song.artist,
-                                        style: TextStyle(
-                                          fontSize: 13,
-                                          fontWeight: FontWeight.w600,
-                                          color: theme.textMuted,
-                                        ),
-                                      ),
-                                      const SizedBox(height: 6),
-                                      Row(
-                                        children: [
-                                          Row(
-                                            children: List.generate(3, (
-                                              starIdx,
-                                            ) {
-                                              final active =
-                                                  starIdx < song.stars;
-                                              return Icon(
-                                                active
-                                                    ? Icons.star_rounded
-                                                    : Icons
-                                                          .star_outline_rounded,
-                                                color: active
-                                                    ? const Color(0xFFFFB800)
-                                                    : theme.border,
-                                                size: 16,
-                                              );
-                                            }),
-                                          ),
-                                          const SizedBox(width: 10),
-                                          if (song.highScore > 0)
+                                      Expanded(
+                                        child: Column(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
+                                          children: [
                                             Text(
-                                              AppLocalizations.of(context).bestScoreShort(song.highScore),
+                                              song.title,
                                               style: TextStyle(
-                                                fontSize: 11,
-                                                fontWeight: FontWeight.w800,
-                                                color: theme.playBg,
-                                                letterSpacing: 0.5,
+                                                fontFamily: 'Fredoka',
+                                                fontSize: 17,
+                                                fontWeight: FontWeight.w900,
+                                                color: theme.textPrimary,
                                               ),
                                             ),
-                                        ],
+                                            const SizedBox(height: 2),
+                                            Text(
+                                              song.artist,
+                                              style: TextStyle(
+                                                fontSize: 13,
+                                                fontWeight: FontWeight.w600,
+                                                color: theme.textMuted,
+                                              ),
+                                            ),
+                                            const SizedBox(height: 6),
+                                            if (_analyses[song.id]
+                                                case final analysis?)
+                                              Text(
+                                                '${AppLocalizations.of(context).analysisReady} · ${analysis.notes.length} tiles'
+                                                '${analysis.bpm > 0 ? ' · ~${analysis.bpm.round()} BPM' : ''}',
+                                                style: TextStyle(
+                                                  color: theme.playBg,
+                                                  fontSize: 11,
+                                                ),
+                                              ),
+                                            TextButton.icon(
+                                              onPressed: _busy
+                                                  ? null
+                                                  : () => _analyzeSong(song),
+                                              icon: const Icon(
+                                                Icons.graphic_eq,
+                                                size: 18,
+                                              ),
+                                              label: Text(
+                                                AppLocalizations.of(context)
+                                                    .analyzeNow,
+                                              ),
+                                            ),
+                                            Row(
+                                              children: [
+                                                Row(
+                                                  children: List.generate(3, (
+                                                    starIdx,
+                                                  ) {
+                                                    final active =
+                                                        starIdx < song.stars;
+                                                    return Icon(
+                                                      active
+                                                          ? Icons.star_rounded
+                                                          : Icons
+                                                                .star_outline_rounded,
+                                                      color: active
+                                                          ? const Color(
+                                                              0xFFFFB800,
+                                                            )
+                                                          : theme.border,
+                                                      size: 16,
+                                                    );
+                                                  }),
+                                                ),
+                                                const SizedBox(width: 10),
+                                                if (song.highScore > 0)
+                                                  Text(
+                                                    AppLocalizations.of(context)
+                                                        .bestScoreShort(
+                                                          song.highScore,
+                                                        ),
+                                                    style: TextStyle(
+                                                      fontSize: 11,
+                                                      fontWeight:
+                                                          FontWeight.w800,
+                                                      color: theme.playBg,
+                                                      letterSpacing: 0.5,
+                                                    ),
+                                                  ),
+                                              ],
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                      if (song.id.startsWith('custom_')) ...[
+                                        IconButton(
+                                          icon: Icon(
+                                            Icons.delete_outline_rounded,
+                                            color: theme.textMuted,
+                                            size: 22,
+                                          ),
+                                          onPressed: () async {
+                                            Haptics.select();
+                                            await StorageService.removeCustomSong(
+                                              song.id,
+                                            );
+                                            await AnalysisService.instance
+                                                .remove(song);
+                                            _analyses.remove(song.id);
+                                            _loadData();
+                                          },
+                                        ),
+                                        const SizedBox(width: 4),
+                                      ],
+                                      Container(
+                                        width: 48,
+                                        height: 48,
+                                        decoration: BoxDecoration(
+                                          color: theme.playBg,
+                                          borderRadius: BorderRadius.circular(
+                                            16,
+                                          ),
+                                        ),
+                                        child: const Center(
+                                          child: Icon(
+                                            Icons.play_arrow_rounded,
+                                            color: Colors.white,
+                                            size: 28,
+                                          ),
+                                        ),
                                       ),
                                     ],
                                   ),
                                 ),
-                                if (song.id.startsWith('custom_')) ...[
-                                  IconButton(
-                                    icon: Icon(
-                                      Icons.delete_outline_rounded,
-                                      color: theme.textMuted,
-                                      size: 22,
-                                    ),
-                                    onPressed: () async {
-                                      Haptics.select();
-                                      await StorageService.removeCustomSong(
-                                        song.id,
-                                      );
-                                      _loadData();
-                                    },
-                                  ),
-                                  const SizedBox(width: 4),
-                                ],
-                                Container(
-                                  width: 48,
-                                  height: 48,
-                                  decoration: BoxDecoration(
-                                    color: theme.playBg,
-                                    borderRadius: BorderRadius.circular(16),
-                                  ),
-                                  child: const Center(
-                                    child: Icon(
-                                      Icons.play_arrow_rounded,
-                                      color: Colors.white,
-                                      size: 28,
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
+                              );
+                            },
                           ),
-                        );
-                      },
-                    ),
                   ),
                 ],
               ),

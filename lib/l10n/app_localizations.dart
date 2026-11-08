@@ -395,13 +395,13 @@ abstract class AppLocalizations {
   /// No description provided for @singleTapPoint1.
   ///
   /// In en, this message translates to:
-  /// **'Tap when the tile reaches the white judgment line.'**
+  /// **'Tap the correct lane as the lower edge of the tile reaches the judgment line.'**
   String get singleTapPoint1;
 
   /// No description provided for @singleTapPoint2.
   ///
   /// In en, this message translates to:
-  /// **'Tapping closer to the center gives PERFECT! rating.'**
+  /// **'Timing within 50 ms gives a PERFECT rating.'**
   String get singleTapPoint2;
 
   /// No description provided for @singleTapPoint3.
@@ -505,6 +505,54 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'GOT IT, LET\'S PLAY!'**
   String get gotItLetsPlay;
+
+  /// No description provided for @analyzeNow.
+  ///
+  /// In en, this message translates to:
+  /// **'Analyze now'**
+  String get analyzeNow;
+
+  /// No description provided for @analyzingSong.
+  ///
+  /// In en, this message translates to:
+  /// **'Analyzing notes and rhythm…'**
+  String get analyzingSong;
+
+  /// No description provided for @analysisHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Analyze this song before playing. Results are saved on this device.'**
+  String get analysisHint;
+
+  /// No description provided for @analysisReady.
+  ///
+  /// In en, this message translates to:
+  /// **'Rhythm ready'**
+  String get analysisReady;
+
+  /// No description provided for @analysisFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Analysis failed. Try another audio file.'**
+  String get analysisFailed;
+
+  /// No description provided for @noBeatsFound.
+  ///
+  /// In en, this message translates to:
+  /// **'No distinct notes or beats found.'**
+  String get noBeatsFound;
+
+  /// No description provided for @startRhythm.
+  ///
+  /// In en, this message translates to:
+  /// **'Tap START. Tiles arrive with the music after a short lead-in.'**
+  String get startRhythm;
+
+  /// No description provided for @rhythmDifficulty.
+  ///
+  /// In en, this message translates to:
+  /// **'Later in the song, tiles scroll faster and more detected notes are included.'**
+  String get rhythmDifficulty;
 }
 
 class _AppLocalizationsDelegate

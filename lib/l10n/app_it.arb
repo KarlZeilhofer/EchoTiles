@@ -63,8 +63,8 @@
   "howToPlayTitle": "COME SI GIOCA",
   "singleTapTitle": "TILES A TOCCO SINGOLO",
   "singleTapSubtitle": "Tocca ogni tile proprio quando raggiunge la linea in basso.",
-  "singleTapPoint1": "Tocca quando il tile raggiunge la linea di giudizio bianca.",
-  "singleTapPoint2": "Toccare più vicino al centro assegna la valutazione PERFETTO!.",
+  "singleTapPoint1": "Tocca la corsia corretta quando il bordo inferiore della tessera raggiunge la linea.",
+  "singleTapPoint2": "Un tocco entro 50 ms dà una valutazione PERFECT.",
   "singleTapPoint3": "Un singolo tocco rimuove subito il tile.",
   "holdTilesTitle": "TIENI PREMUTO I TILES",
   "holdTilesSubtitle": "Riconoscibili dalla testa circolare e dalla linea retta.",
@@ -81,5 +81,13 @@
   "chargingCombo": "COMBO IN CARICA",
   "missTriggerTitle": "ERRORE FATALE",
   "missTriggerText": "Toccare spazi vuoti o lasciare cadere i tile senza toccarli termina subito la partita.",
-  "gotItLetsPlay": "CHIARO, GIOCHIAMO!"
+  "gotItLetsPlay": "CHIARO, GIOCHIAMO!",
+  "analyzeNow": "Analizza ora",
+  "analyzingSong": "Analisi delle note e del ritmo…",
+  "analysisHint": "Analizza il brano prima di giocare. Il risultato viene salvato sul dispositivo.",
+  "analysisReady": "Ritmo pronto",
+  "analysisFailed": "Analisi non riuscita. Prova un altro file audio.",
+  "noBeatsFound": "Nessuna nota o battito distinto trovato.",
+  "startRhythm": "Tocca START. Le tessere seguono la musica dopo una breve introduzione.",
+  "rhythmDifficulty": "Più avanti nel brano, le tessere scorrono più velocemente e includono più note rilevate."
 }

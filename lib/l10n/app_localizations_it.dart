@@ -165,11 +165,11 @@ class AppLocalizationsIt extends AppLocalizations {
 
   @override
   String get singleTapPoint1 =>
-      'Tocca quando il tile raggiunge la linea di giudizio bianca.';
+      'Tocca la corsia corretta quando il bordo inferiore della tessera raggiunge la linea.';
 
   @override
   String get singleTapPoint2 =>
-      'Toccare più vicino al centro assegna la valutazione PERFETTO!.';
+      'Un tocco entro 50 ms dà una valutazione PERFECT.';
 
   @override
   String get singleTapPoint3 => 'Un singolo tocco rimuove subito il tile.';
@@ -229,4 +229,32 @@ class AppLocalizationsIt extends AppLocalizations {
 
   @override
   String get gotItLetsPlay => 'CHIARO, GIOCHIAMO!';
+
+  @override
+  String get analyzeNow => 'Analizza ora';
+
+  @override
+  String get analyzingSong => 'Analisi delle note e del ritmo…';
+
+  @override
+  String get analysisHint =>
+      'Analizza il brano prima di giocare. Il risultato viene salvato sul dispositivo.';
+
+  @override
+  String get analysisReady => 'Ritmo pronto';
+
+  @override
+  String get analysisFailed =>
+      'Analisi non riuscita. Prova un altro file audio.';
+
+  @override
+  String get noBeatsFound => 'Nessuna nota o battito distinto trovato.';
+
+  @override
+  String get startRhythm =>
+      'Tocca START. Le tessere seguono la musica dopo una breve introduzione.';
+
+  @override
+  String get rhythmDifficulty =>
+      'Più avanti nel brano, le tessere scorrono più velocemente e includono più note rilevate.';
 }

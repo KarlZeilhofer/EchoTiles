@@ -1,5 +1,5 @@
-import 'dart:math';
 import 'package:flutter/material.dart';
+
 import '../l10n/app_localizations.dart';
 import '../models/app_theme.dart';
 import '../services/haptics.dart';
@@ -7,10 +7,7 @@ import '../services/haptics.dart';
 class HowToPlayScreen extends StatelessWidget {
   final AppThemeData appTheme;
 
-  const HowToPlayScreen({
-    super.key,
-    required this.appTheme,
-  });
+  const HowToPlayScreen({super.key, required this.appTheme});
 
   @override
   Widget build(BuildContext context) {
@@ -25,7 +22,11 @@ class HowToPlayScreen extends StatelessWidget {
         scrolledUnderElevation: 0,
         centerTitle: true,
         leading: IconButton(
-          icon: Icon(Icons.arrow_back_ios_new_rounded, color: theme.textPrimary, size: 22),
+          icon: Icon(
+            Icons.arrow_back_ios_new_rounded,
+            color: theme.textPrimary,
+            size: 22,
+          ),
           onPressed: () {
             Haptics.select();
             Navigator.of(context).pop();
@@ -60,14 +61,10 @@ class HowToPlayScreen extends StatelessWidget {
             const SizedBox(height: 18),
             _buildCard(
               theme: theme,
-              title: l10n.holdTilesTitle,
-              subtitle: l10n.holdTilesSubtitle,
-              visual: _HoldTileVisual(theme: theme),
-              points: [
-                l10n.holdTilesPoint1,
-                l10n.holdTilesPoint2,
-                l10n.holdTilesPoint3,
-              ],
+              title: l10n.analyzeNow,
+              subtitle: l10n.analysisHint,
+              visual: Icon(Icons.graphic_eq, size: 64, color: theme.playBg),
+              points: [l10n.startRhythm, l10n.rhythmDifficulty],
             ),
             const SizedBox(height: 18),
             _buildCard(
@@ -202,7 +199,10 @@ class _SingleTileVisual extends StatelessWidget {
       decoration: BoxDecoration(
         color: theme.background,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: theme.border.withValues(alpha: 0.6), width: 1.5),
+        border: Border.all(
+          color: theme.border.withValues(alpha: 0.6),
+          width: 1.5,
+        ),
       ),
       child: ClipRRect(
         borderRadius: BorderRadius.circular(15),
@@ -216,7 +216,10 @@ class _SingleTileVisual extends StatelessWidget {
                     decoration: BoxDecoration(
                       border: Border(
                         right: i < 3
-                            ? BorderSide(color: theme.border.withValues(alpha: 0.35), width: 1.0)
+                            ? BorderSide(
+                                color: theme.border.withValues(alpha: 0.35),
+                                width: 1.0,
+                              )
                             : BorderSide.none,
                       ),
                     ),
@@ -264,7 +267,10 @@ class _SingleTileVisual extends StatelessWidget {
                       ),
                       child: Center(
                         child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 3,
+                          ),
                           decoration: BoxDecoration(
                             color: theme.playBg,
                             borderRadius: BorderRadius.circular(6),
@@ -301,173 +307,6 @@ class _SingleTileVisual extends StatelessWidget {
   }
 }
 
-class _HoldTileVisual extends StatelessWidget {
-  final AppThemeData theme;
-
-  const _HoldTileVisual({required this.theme});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      height: 160,
-      decoration: BoxDecoration(
-        color: theme.background,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: theme.border.withValues(alpha: 0.6), width: 1.5),
-      ),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(15),
-        child: Stack(
-          children: [
-            Row(
-              children: List.generate(
-                4,
-                (i) => Expanded(
-                  child: Container(
-                    decoration: BoxDecoration(
-                      border: Border(
-                        right: i < 3
-                            ? BorderSide(color: theme.border.withValues(alpha: 0.35), width: 1.0)
-                            : BorderSide.none,
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            ),
-            Positioned(
-              left: 0,
-              right: 0,
-              bottom: 26,
-              child: Container(
-                height: 2,
-                color: Colors.white.withValues(alpha: 0.4),
-              ),
-            ),
-            Positioned(
-              left: 80,
-              bottom: 20,
-              child: SizedBox(
-                width: 76,
-                height: 120,
-                child: CustomPaint(
-                  painter: _HoldTilePreviewPainter(theme: theme),
-                ),
-              ),
-            ),
-            Positioned(
-              left: 105,
-              bottom: 2,
-              child: Icon(
-                Icons.touch_app_rounded,
-                color: theme.playBg,
-                size: 26,
-              ),
-            ),
-            Positioned(
-              right: 14,
-              top: 14,
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                decoration: BoxDecoration(
-                  color: theme.playBg.withValues(alpha: 0.15),
-                  borderRadius: BorderRadius.circular(10),
-                  border: Border.all(color: theme.playBg.withValues(alpha: 0.4), width: 1.2),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(Icons.bolt_rounded, size: 14, color: theme.playBg),
-                    const SizedBox(width: 4),
-                    Text(
-                      AppLocalizations.of(context).chargingCombo,
-                      style: TextStyle(
-                        fontSize: 9.5,
-                        fontWeight: FontWeight.w900,
-                        letterSpacing: 0.8,
-                        color: theme.playBg,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _HoldTilePreviewPainter extends CustomPainter {
-  final AppThemeData theme;
-
-  const _HoldTilePreviewPainter({required this.theme});
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final rect = Rect.fromLTWH(0, 0, size.width, size.height);
-    final tailPaint = Paint()..color = theme.tileTailColor.withValues(alpha: 0.70);
-    canvas.drawRect(rect, tailPaint);
-
-    final progressHeight = size.height * 0.48;
-    final filledRect = Rect.fromLTWH(
-      0,
-      size.height - progressHeight,
-      size.width,
-      progressHeight,
-    );
-    final hitFillPaint = Paint()..color = theme.tileHitColor.withValues(alpha: 0.85);
-    canvas.drawRect(filledRect, hitFillPaint);
-
-    final contactY = size.height - progressHeight;
-    final sparkPaint = Paint()
-      ..color = Colors.white
-      ..strokeWidth = 2.5;
-    canvas.drawLine(Offset(2, contactY), Offset(size.width - 2, contactY), sparkPaint);
-
-    final borderPaint = Paint()
-      ..color = theme.tileHitColor
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 2.0;
-    canvas.drawRect(rect, borderPaint);
-
-    final centerX = size.width / 2;
-    final circleRadius = min(15.0, (size.width - 14) / 2);
-    final circleCenter = Offset(centerX, size.height - circleRadius - 6);
-    final lineTop = 8.0;
-    final lineBottom = circleCenter.dy - circleRadius;
-
-    if (lineBottom > lineTop) {
-      final linePaint = Paint()
-        ..color = Colors.white.withValues(alpha: 0.95)
-        ..strokeWidth = 3.5
-        ..strokeCap = StrokeCap.round;
-      canvas.drawLine(Offset(centerX, lineTop), Offset(centerX, lineBottom), linePaint);
-      canvas.drawCircle(Offset(centerX, lineTop), 3.5, linePaint);
-    }
-
-    final circlePaint = Paint()
-      ..color = theme.tileHitColor
-      ..style = PaintingStyle.fill;
-    canvas.drawCircle(circleCenter, circleRadius, circlePaint);
-
-    final circleBorder = Paint()
-      ..color = Colors.white
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 2.5;
-    canvas.drawCircle(circleCenter, circleRadius, circleBorder);
-
-    final innerDot = Paint()
-      ..color = Colors.white
-      ..style = PaintingStyle.fill;
-    canvas.drawCircle(circleCenter, circleRadius * 0.45, innerDot);
-  }
-
-  @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
-}
-
 class _MistakeVisual extends StatelessWidget {
   final AppThemeData theme;
 
@@ -480,7 +319,10 @@ class _MistakeVisual extends StatelessWidget {
       decoration: BoxDecoration(
         color: const Color(0xFFEF4444).withValues(alpha: 0.10),
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFFEF4444).withValues(alpha: 0.35), width: 1.5),
+        border: Border.all(
+          color: const Color(0xFFEF4444).withValues(alpha: 0.35),
+          width: 1.5,
+        ),
       ),
       child: Row(
         children: [
@@ -491,7 +333,11 @@ class _MistakeVisual extends StatelessWidget {
               color: Color(0xFFEF4444),
               shape: BoxShape.circle,
             ),
-            child: const Icon(Icons.close_rounded, color: Colors.white, size: 28),
+            child: const Icon(
+              Icons.close_rounded,
+              color: Colors.white,
+              size: 28,
+            ),
           ),
           const SizedBox(width: 14),
           Expanded(

@@ -63,8 +63,8 @@
   "howToPlayTitle": "HOW TO PLAY",
   "singleTapTitle": "SINGLE TAP TILES",
   "singleTapSubtitle": "Tap each tile right as it hits the bottom line.",
-  "singleTapPoint1": "Tap when the tile reaches the white judgment line.",
-  "singleTapPoint2": "Tapping closer to the center gives PERFECT! rating.",
+  "singleTapPoint1": "Tap the correct lane as the lower edge of the tile reaches the judgment line.",
+  "singleTapPoint2": "Timing within 50 ms gives a PERFECT rating.",
   "singleTapPoint3": "A single tap clears the tile immediately.",
   "holdTilesTitle": "HOLD TILES",
   "holdTilesSubtitle": "Identified by the circle head and straight line.",
@@ -81,5 +81,13 @@
   "chargingCombo": "CHARGING COMBO",
   "missTriggerTitle": "MISS TRIGGER",
   "missTriggerText": "Tapping empty spaces or letting tiles fall through ends your run immediately.",
-  "gotItLetsPlay": "GOT IT, LET'S PLAY!"
+  "gotItLetsPlay": "GOT IT, LET'S PLAY!",
+  "analyzeNow": "Analyze now",
+  "analyzingSong": "Analyzing notes and rhythm…",
+  "analysisHint": "Analyze this song before playing. Results are saved on this device.",
+  "analysisReady": "Rhythm ready",
+  "analysisFailed": "Analysis failed. Try another audio file.",
+  "noBeatsFound": "No distinct notes or beats found.",
+  "startRhythm": "Tap START. Tiles arrive with the music after a short lead-in.",
+  "rhythmDifficulty": "Later in the song, tiles scroll faster and more detected notes are included."
 }

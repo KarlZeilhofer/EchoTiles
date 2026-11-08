@@ -1,22 +1,28 @@
 import 'dart:async';
 import 'dart:math';
 import 'dart:ui';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
+
 import '../l10n/app_localizations.dart';
 import '../models/app_theme.dart';
 import '../models/game_models.dart';
+import '../models/song_analysis.dart';
+import '../models/rhythm_timeline.dart';
 import '../services/audio_service.dart';
 import '../services/haptics.dart';
 import '../services/storage_service.dart';
 
 class GameScreen extends StatefulWidget {
   final SongItem song;
+  final SongAnalysis analysis;
   final AppThemeData appTheme;
 
   const GameScreen({
     super.key,
     required this.song,
+    required this.analysis,
     required this.appTheme,
   });
 
@@ -24,360 +30,185 @@ class GameScreen extends StatefulWidget {
   State<GameScreen> createState() => _GameScreenState();
 }
 
-class _GameScreenState extends State<GameScreen> with SingleTickerProviderStateMixin {
+class _GameScreenState extends State<GameScreen>
+    with SingleTickerProviderStateMixin, WidgetsBindingObserver {
   static const double _targetLineFactor = 0.80;
   static const double _tileHeightFactor = 0.20;
-  static const double _beatGap = 0.06;
-
   late Ticker _ticker;
-  Duration _lastElapsed = Duration.zero;
-
+  final Stopwatch _clock = Stopwatch();
+  double _clockBase = -2.0;
+  bool _audioStarted = false;
+  bool _audioStarting = false;
+  int _generation = 0;
   GameStatus _status = GameStatus.ready;
   final List<GameTile> _tiles = [];
   final List<HitFeedback> _feedbacks = [];
   final Map<int, int> _activePointerTiles = {};
-  final List<int> _lanePatternQueue = [];
-  final List<double> _gapPatternQueue = [];
-
   int _score = 0;
   int _combo = 0;
   int _maxCombo = 0;
   int _nextTileIndex = 0;
-  int _lastLane = -1;
   int _failedLane = -1;
-  int _totalNotes = 160;
-  bool _lastWasDouble = false;
-
-  double _baseScrollSpeed = 0.50;
   double _songProgress = 0.0;
-  final Random _rng = Random();
-
-  Duration? _audioDuration;
-  bool _songAudioFinished = false;
-  StreamSubscription<Duration>? _durationSub;
   StreamSubscription<Duration>? _positionSub;
   StreamSubscription<void>? _completeSub;
-  Size _screenSize = Size.zero;
+
+  double get _time => _clockBase + _clock.elapsedMicroseconds / 1000000;
 
   @override
   void initState() {
     super.initState();
-    _totalNotes = widget.song.notesCount;
-    _initLevel();
+    WidgetsBinding.instance.addObserver(this);
     _ticker = createTicker(_onTick);
-    _listenAudio();
+    _initLevel();
+    _positionSub = AudioService.instance.onPositionChanged.listen((pos) {
+      if (!_audioStarted || _audioStarting || _status != GameStatus.playing) {
+        return;
+      }
+      _clockBase = pos.inMicroseconds / 1000000;
+      _clock.reset();
+    });
+    _completeSub = AudioService.instance.onPlayerComplete.listen((_) {
+      if (mounted && _status == GameStatus.playing) {
+        // Keep the judgment window open for a note right at the end.
+        _clockBase = widget.analysis.duration;
+        _clock.reset();
+      }
+    });
   }
 
-  void _listenAudio() {
-    _durationSub = AudioService.instance.onDurationChanged.listen((dur) {
-      if (dur.inMilliseconds > 0 && mounted) {
-        setState(() {
-          _audioDuration = dur;
-          final calcNotes = (dur.inMilliseconds / 1000.0 * ((widget.song.bpm / 120.0) * 2.3)).round();
-          if (calcNotes > _totalNotes) {
-            _totalNotes = calcNotes;
-          }
-        });
-      }
-    });
-
-    _positionSub = AudioService.instance.onPositionChanged.listen((pos) {
-      if (_audioDuration != null && _audioDuration!.inMilliseconds > 0 && mounted) {
-        final progress = (pos.inMilliseconds / _audioDuration!.inMilliseconds).clamp(0.0, 1.0);
-        setState(() {
-          _songProgress = progress;
-          if (progress >= 1.0) {
-            _songAudioFinished = true;
-          }
-        });
-      }
-    });
-
-    _completeSub = AudioService.instance.onPlayerComplete.listen((_) {
-      if (mounted) {
-        setState(() {
-          _songAudioFinished = true;
-          _songProgress = 1.0;
-        });
-      }
-    });
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state != AppLifecycleState.resumed && _status == GameStatus.playing) {
+      _pauseGame();
+    }
   }
 
   void _initLevel() {
+    _generation++;
+    if (_ticker.isActive) _ticker.stop();
+    _clock.stop();
+    _clock.reset();
+    _clockBase = -2;
+    _audioStarted = false;
+    _audioStarting = false;
     _status = GameStatus.ready;
     _score = 0;
     _combo = 0;
     _maxCombo = 0;
     _nextTileIndex = 0;
-    _lastLane = -1;
     _failedLane = -1;
-    _songAudioFinished = false;
-    _lastWasDouble = false;
-    _totalNotes = widget.song.notesCount;
-    if (_audioDuration != null && _audioDuration!.inMilliseconds > 0) {
-      final calcNotes = (_audioDuration!.inMilliseconds / 1000.0 * ((widget.song.bpm / 120.0) * 2.3)).round();
-      if (calcNotes > _totalNotes) {
-        _totalNotes = calcNotes;
-      }
-    }
+    _songProgress = 0;
     _tiles.clear();
     _feedbacks.clear();
     _activePointerTiles.clear();
-    _lanePatternQueue.clear();
-    _gapPatternQueue.clear();
-    _baseScrollSpeed = (widget.song.bpm / 120.0) * 0.50;
-    _songProgress = 0.0;
-
-    _spawnTile(initialY: _targetLineFactor);
-    for (int i = 0; i < 4; i++) {
-      _spawnTile();
-    }
-  }
-
-  int _generateNextLane() {
-    if (_lanePatternQueue.isEmpty) {
-      _fillLanePatterns();
-    }
-    int lane = _lanePatternQueue.removeAt(0);
-    if (lane == _lastLane) {
-      lane = (_lastLane + 1 + _rng.nextInt(3)) % 4;
-    }
-    _lastLane = lane;
-    return lane;
-  }
-
-  void _fillLanePatterns() {
-    final patternType = _rng.nextInt(6);
-    switch (patternType) {
-      case 0:
-        final s = _rng.nextInt(4);
-        _lanePatternQueue.addAll([s, (s + 1) % 4, (s + 2) % 4, (s + 3) % 4]);
-        _gapPatternQueue.addAll([0.05, 0.05, 0.05, 0.07]);
-        break;
-      case 1:
-        final s = _rng.nextInt(4);
-        _lanePatternQueue.addAll([s, (s + 3) % 4, (s + 2) % 4, (s + 1) % 4]);
-        _gapPatternQueue.addAll([0.05, 0.05, 0.05, 0.07]);
-        break;
-      case 2:
-        final a = _rng.nextInt(4);
-        final b = (a + 1 + _rng.nextInt(3)) % 4;
-        _lanePatternQueue.addAll([a, b, a, b]);
-        _gapPatternQueue.addAll([0.06, 0.06, 0.06, 0.08]);
-        break;
-      case 3:
-        final a = _rng.nextInt(4);
-        final b = (a + 2) % 4;
-        final c = (a + 1) % 4;
-        final d = (a + 3) % 4;
-        _lanePatternQueue.addAll([a, b, c, d]);
-        _gapPatternQueue.addAll([0.05, 0.06, 0.05, 0.07]);
-        break;
-      case 4:
-        final a = _rng.nextInt(4);
-        final b = (a + 1 + _rng.nextInt(3)) % 4;
-        final c = (b + 1 + _rng.nextInt(3)) % 4;
-        _lanePatternQueue.addAll([a, b, c, b]);
-        _gapPatternQueue.addAll([0.06, 0.06, 0.06, 0.07]);
-        break;
-      default:
-        int current = _lastLane == -1 ? _rng.nextInt(4) : _lastLane;
-        for (int i = 0; i < 4; i++) {
-          current = (current + 1 + _rng.nextInt(3)) % 4;
-          _lanePatternQueue.add(current);
-          _gapPatternQueue.add(0.06);
-        }
-        break;
-    }
-  }
-
-  void _spawnTile({double? initialY}) {
-    final hasAudio = widget.song.assetAudio.isNotEmpty;
-    if (hasAudio ? _songAudioFinished : _nextTileIndex >= _totalNotes) return;
-
-    final lane = _generateNextLane();
-    final double gap = _gapPatternQueue.isNotEmpty
-        ? _gapPatternQueue.removeAt(0)
-        : _beatGap;
-
-    final allowLong = _nextTileIndex >= 10 && _songProgress < 0.85;
-    final isLong = initialY == null && allowLong && (_rng.nextDouble() < 0.14);
-    final length = isLong ? 3.0 : 1.0;
-
-    double yPos;
-    if (initialY != null) {
-      yPos = initialY;
-    } else {
-      if (_tiles.isNotEmpty) {
-        final highestTop = _tiles
-            .map((t) => t.y - (_tileHeightFactor * t.length))
-            .reduce(min);
-        yPos = highestTop - gap;
-      } else {
-        yPos = _targetLineFactor;
-      }
-    }
-
     _tiles.add(
       GameTile(
-        id: _nextTileIndex,
-        lane: lane,
-        y: yPos,
-        length: length,
-        isLong: isLong,
-        noteIndex: _nextTileIndex,
+        id: 0,
+        lane: widget.analysis.notes.first.lane,
+        y: _targetLineFactor,
       ),
     );
-    _nextTileIndex++;
+    AudioService.instance.stopSong();
+  }
 
-    final allowDouble = initialY == null &&
-        _nextTileIndex >= 8 &&
-        !_lastWasDouble &&
-        _rng.nextDouble() < 0.50;
-
-    if (allowDouble) {
-      final candidates = [for (int i = 0; i < 4; i++) if ((i - lane).abs() >= 2) i];
-      final secondLane = candidates[_rng.nextInt(candidates.length)];
-      _tiles.add(
-        GameTile(
-          id: _nextTileIndex,
-          lane: secondLane,
-          y: yPos,
-          length: length,
-          isLong: isLong,
-          noteIndex: _nextTileIndex,
-        ),
-      );
-      _nextTileIndex++;
-      _lastWasDouble = true;
-      _lastLane = secondLane;
-    } else {
-      _lastWasDouble = false;
+  Future<void> _beginAudio() async {
+    final generation = _generation;
+    _audioStarting = true;
+    _audioStarted = true;
+    _clock.stop();
+    _clock.reset();
+    _clockBase = 0;
+    try {
+      await AudioService.instance.playSong(widget.song.assetAudio);
+      if (!mounted || generation != _generation) return;
+      _audioStarting = false;
+      if (_status == GameStatus.playing) {
+        _clock.start();
+      } else {
+        await AudioService.instance.pauseSong();
+      }
+    } catch (_) {
+      if (mounted && generation == _generation) {
+        _triggerGameOver(-1);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(AppLocalizations.of(context).analysisFailed)),
+        );
+      }
     }
   }
 
   void _onTick(Duration elapsed) {
-    if (_status != GameStatus.playing) {
-      _lastElapsed = elapsed;
-      return;
-    }
-
-    double dt = (elapsed - _lastElapsed).inMicroseconds / 1000000.0;
-    _lastElapsed = elapsed;
-    if (dt <= 0) return;
-    if (dt > 0.05) dt = 0.05;
-
-    final currentSpeed = _baseScrollSpeed * (1.0 + pow(_songProgress, 2.5) * 1.50);
-
+    if (_status != GameStatus.playing) return;
+    if (!_audioStarted && _time >= 0) _beginAudio();
+    final time = _time;
+    final analysis = widget.analysis;
     setState(() {
-      for (final tile in _tiles) {
-        tile.y += currentSpeed * dt;
-        if (tile.isHolding && tile.isLong) {
-          final tileHeight = _tileHeightFactor * tile.length;
-          final prevStep = (tile.holdProgress * 10).floor();
-          tile.holdProgress = (tile.holdProgress + (currentSpeed * dt) / tileHeight).clamp(0.0, 1.0);
-          _score += (dt * 220).toInt();
-
-          final currStep = (tile.holdProgress * 10).floor();
-          if (currStep > prevStep) {
-            _combo++;
-            if (_combo > _maxCombo) _maxCombo = _combo;
-            Haptics.light();
-          }
-
-          if (tile.holdProgress >= 1.0) {
-            tile.isHolding = false;
-            tile.isHit = true;
-            _score += 150;
-            _combo += 2;
-            if (_combo > _maxCombo) _maxCombo = _combo;
-            Haptics.medium();
-            final sw = _screenSize.width > 0 ? _screenSize.width : 400.0;
-            final sh = _screenSize.height > 0 ? _screenSize.height : 800.0;
-            _feedbacks.add(
-              HitFeedback(
-                quality: HitQuality.perfect,
-                x: (tile.lane + 0.5) * (sw / 4),
-                y: sh * _targetLineFactor,
-                timestamp: DateTime.now().millisecondsSinceEpoch,
-              ),
-            );
-          }
-        }
+      _songProgress = (time / analysis.duration).clamp(0.0, 1.0);
+      while (_nextTileIndex < analysis.notes.length) {
+        final note = analysis.notes[_nextTileIndex];
+        final y = RhythmTimeline.position(note.time, time, analysis.duration);
+        if (y < -0.25) break;
+        _tiles.add(
+          GameTile(
+            id: _nextTileIndex + 1,
+            lane: note.lane,
+            y: y,
+            noteIndex: _nextTileIndex,
+          ),
+        );
+        _nextTileIndex++;
       }
-
-      final highestTop = _tiles.isEmpty
-          ? 1.0
-          : _tiles.map((t) => t.y - (_tileHeightFactor * t.length)).reduce(min);
-      final hasAudio = widget.song.assetAudio.isNotEmpty;
-      final canSpawn = hasAudio ? !_songAudioFinished : _nextTileIndex < _totalNotes;
-      if (highestTop > -0.30 && canSpawn) {
-        _spawnTile();
-      }
-
       for (final tile in _tiles) {
-        if (!tile.isHit && !tile.isHolding && !tile.isMissed && tile.y > 1.02) {
+        final note = analysis.notes[tile.noteIndex];
+        tile.y = RhythmTimeline.position(note.time, time, analysis.duration);
+        if (!tile.isHit && time - note.time > 0.16) {
           tile.isMissed = true;
           _triggerGameOver(tile.lane);
           return;
         }
       }
-
-      _tiles.removeWhere((t) => (t.isHit && !t.isHolding && t.y > 1.30));
-
+      _tiles.removeWhere((t) => t.isHit && t.y > 1.3);
       final now = DateTime.now().millisecondsSinceEpoch;
       _feedbacks.removeWhere((f) => now - f.timestamp > 700);
-
-      if (_audioDuration == null || _audioDuration!.inMilliseconds == 0) {
-        _songProgress = (_nextTileIndex / _totalNotes).clamp(0.0, 1.0);
-      }
-
-      final isComplete = hasAudio ? _songAudioFinished : _nextTileIndex >= _totalNotes;
-      if (isComplete && _tiles.every((t) => t.isHit)) {
+      if (time >= analysis.duration &&
+          _nextTileIndex == analysis.notes.length &&
+          _tiles.every((t) => t.isHit)) {
         _triggerVictory();
       }
     });
   }
 
-  void _startGame() async {
+  void _startGame() {
+    _tiles.clear();
     _status = GameStatus.playing;
-    _lastElapsed = Duration.zero;
+    _clock.start();
     _ticker.start();
-    if (widget.song.assetAudio.isNotEmpty) {
-      await AudioService.instance.playSong(widget.song.assetAudio);
-      final dur = await AudioService.instance.getDuration();
-      if (dur != null && dur.inMilliseconds > 0 && mounted) {
-        setState(() {
-          _audioDuration = dur;
-          final calcNotes = (dur.inMilliseconds / 1000.0 * ((widget.song.bpm / 120.0) * 2.3)).round();
-          if (calcNotes > _totalNotes) {
-            _totalNotes = calcNotes;
-          }
-        });
-      }
-    }
   }
 
   void _pauseGame() {
-    if (_status != GameStatus.playing && _status != GameStatus.ready) return;
+    if (_status != GameStatus.playing) return;
+    _clock.stop();
+    _ticker.stop();
     setState(() => _status = GameStatus.paused);
-    if (_ticker.isActive) {
-      _ticker.stop();
-    }
-    AudioService.instance.pauseSong();
+    if (_audioStarted) AudioService.instance.pauseSong();
   }
 
-  void _resumeGame() {
+  void _resumeGame() async {
     if (_status != GameStatus.paused) return;
+    if (_audioStarted && !_audioStarting) {
+      await AudioService.instance.resumeSong();
+    }
+    if (!mounted || _status != GameStatus.paused) return;
     setState(() => _status = GameStatus.playing);
-    _lastElapsed = Duration.zero;
+    if (!_audioStarting) _clock.start();
     _ticker.start();
-    AudioService.instance.resumeSong();
   }
 
   void _triggerGameOver(int lane, [Offset? mistapOffset]) {
     _status = GameStatus.gameOver;
     _failedLane = lane;
+    _clock.stop();
     _ticker.stop();
     AudioService.instance.stopSong();
     Haptics.heavy();
@@ -398,12 +229,12 @@ class _GameScreenState extends State<GameScreen> with SingleTickerProviderStateM
 
   void _triggerVictory() {
     _status = GameStatus.victory;
+    _clock.stop();
     _ticker.stop();
     AudioService.instance.stopSong();
     Haptics.medium();
-    final stars = _calculateStars();
     StorageService.setHighScore(widget.song.id, _score);
-    StorageService.setStars(widget.song.id, stars);
+    StorageService.setStars(widget.song.id, _calculateStars());
     StorageService.setBestCombo(_maxCombo);
   }
 
@@ -415,93 +246,48 @@ class _GameScreenState extends State<GameScreen> with SingleTickerProviderStateM
   }
 
   void _onPointerDown(PointerDownEvent event, Size screenSize) {
-    if (_status == GameStatus.gameOver || _status == GameStatus.victory || _status == GameStatus.paused) {
-      return;
-    }
-
-    if (event.localPosition.dy < 75) {
-      return;
-    }
-
-    final laneWidth = screenSize.width / 4;
+    if (_status != GameStatus.playing && _status != GameStatus.ready) return;
+    if (event.localPosition.dy < 100) return;
     final tapX = event.localPosition.dx;
     final tapY = event.localPosition.dy;
-    final tapLane = (tapX / laneWidth).floor().clamp(0, 3);
-    final tapYFraction = tapY / screenSize.height;
-
-    final unhitTiles = _tiles.where((t) => !t.isHit && !t.isHolding && !t.isMissed).toList();
-    final laneCandidates = unhitTiles.where((t) => t.lane == tapLane).toList();
-
-    laneCandidates.sort((a, b) => b.y.compareTo(a.y));
-    GameTile? hitTile;
-    for (final t in laneCandidates) {
-      final tileTop = t.y - (_tileHeightFactor * t.length);
-      final isDirectTap = tapYFraction >= (tileTop - 0.04) && tapYFraction <= (t.y + 0.04);
-      final isTargetLineHit = (t.y >= _targetLineFactor - 0.09 && tileTop <= _targetLineFactor + 0.09) &&
-          ((tapYFraction - _targetLineFactor).abs() <= 0.09);
-      if (isDirectTap || isTargetLineHit) {
-        hitTile = t;
-        break;
-      }
-    }
-
-    if (hitTile == null) {
-      _triggerGameOver(tapLane, Offset(tapX, tapY));
-      return;
-    }
-
-    final hasLowerMissed = unhitTiles.any(
-      (t) => t.id < hitTile!.id && (t.y - (_tileHeightFactor * t.length)) > 1.0,
-    );
-    if (hasLowerMissed) {
-      _triggerGameOver(tapLane, Offset(tapX, tapY));
-      return;
-    }
-
+    final lane = (tapX / (screenSize.width / 4)).floor().clamp(0, 3);
     if (_status == GameStatus.ready) {
-      if (hitTile.id != 0) {
-        _triggerGameOver(tapLane, Offset(tapX, tapY));
-        return;
+      final start = _tiles.first;
+      if (lane == start.lane &&
+          tapY / screenSize.height >= start.y - _tileHeightFactor &&
+          tapY / screenSize.height <= start.y + 0.04) {
+        _startGame();
+        setState(() {});
       }
-      _startGame();
+      return;
     }
-
-    Haptics.light();
-
-    final tileTop = hitTile.y - (_tileHeightFactor * hitTile.length);
-    double dist;
-    if (_targetLineFactor >= tileTop && _targetLineFactor <= hitTile.y) {
-      dist = 0.0;
-    } else {
-      dist = min((hitTile.y - _targetLineFactor).abs(), (tileTop - _targetLineFactor).abs());
+    if (_time < 0 || _audioStarting) return;
+    final candidates = _tiles.where((t) => !t.isHit && t.lane == lane).toList()
+      ..sort((a, b) => a.noteIndex.compareTo(b.noteIndex));
+    final tile = candidates.firstOrNull;
+    final distance = tile == null
+        ? double.infinity
+        : (widget.analysis.notes[tile.noteIndex].time - _time).abs();
+    if (tile == null || distance > 0.16) {
+      _triggerGameOver(lane, Offset(tapX, tapY));
+      return;
     }
-
-    HitQuality quality;
-    int addScore;
-
-    if (dist < 0.025) {
-      quality = HitQuality.perfect;
-      addScore = 100;
-    } else if (dist < 0.06) {
-      quality = HitQuality.great;
-      addScore = 80;
-    } else {
-      quality = HitQuality.good;
-      addScore = 50;
-    }
-
+    final quality = distance < 0.05
+        ? HitQuality.perfect
+        : distance < 0.10
+        ? HitQuality.great
+        : HitQuality.good;
     _combo++;
-    if (_combo > _maxCombo) _maxCombo = _combo;
-    _score += addScore + (_combo * 2);
-
-    if (hitTile.isLong) {
-      hitTile.isHolding = true;
-      hitTile.holdProgress = 0.0;
-      _activePointerTiles[event.pointer] = hitTile.id;
-    } else {
-      hitTile.isHit = true;
-    }
-
+    _maxCombo = max(_maxCombo, _combo);
+    _score +=
+        (quality == HitQuality.perfect
+            ? 100
+            : quality == HitQuality.great
+            ? 80
+            : 50) +
+        _combo * 2;
+    tile.isHit = true;
+    Haptics.light();
     _feedbacks.add(
       HitFeedback(
         quality: quality,
@@ -519,7 +305,10 @@ class _GameScreenState extends State<GameScreen> with SingleTickerProviderStateM
       final tile = _tiles.where((t) => t.id == tileId).firstOrNull;
       if (tile != null && tile.isHolding) {
         final laneWidth = screenSize.width / 4;
-        final currentLane = (event.localPosition.dx / laneWidth).floor().clamp(0, 3);
+        final currentLane = (event.localPosition.dx / laneWidth).floor().clamp(
+          0,
+          3,
+        );
         if (currentLane != tile.lane) {
           tile.isHolding = false;
           tile.isHit = true;
@@ -559,8 +348,10 @@ class _GameScreenState extends State<GameScreen> with SingleTickerProviderStateM
 
   @override
   void dispose() {
+    _generation++;
+    WidgetsBinding.instance.removeObserver(this);
+    _clock.stop();
     _ticker.dispose();
-    _durationSub?.cancel();
     _positionSub?.cancel();
     _completeSub?.cancel();
     AudioService.instance.stopSong();
@@ -586,7 +377,6 @@ class _GameScreenState extends State<GameScreen> with SingleTickerProviderStateM
             child: LayoutBuilder(
               builder: (context, constraints) {
                 final size = Size(constraints.maxWidth, constraints.maxHeight);
-                _screenSize = size;
                 return Listener(
                   onPointerDown: (e) => _onPointerDown(e, size),
                   onPointerMove: (e) => _onPointerMove(e, size),
@@ -610,15 +400,43 @@ class _GameScreenState extends State<GameScreen> with SingleTickerProviderStateM
               },
             ),
           ),
-          Positioned(
-            top: 0,
-            left: 0,
-            right: 0,
-            child: _buildHeader(theme),
-          ),
+          Positioned(top: 0, left: 0, right: 0, child: _buildHeader(theme)),
+          if (_status == GameStatus.ready)
+            Positioned(
+              left: 24,
+              right: 24,
+              top: 150,
+              child: IgnorePointer(
+                child: Text(
+                  AppLocalizations.of(context).startRhythm,
+                  textAlign: TextAlign.center,
+                  style: TextStyle(color: theme.textPrimary, fontSize: 16),
+                ),
+              ),
+            ),
+          if (_status == GameStatus.playing && !_audioStarted)
+            Positioned(
+              left: 0,
+              right: 0,
+              top: 150,
+              child: IgnorePointer(
+                child: Center(
+                  child: Text(
+                    '${(-_time).ceil().clamp(1, 2)}',
+                    style: TextStyle(
+                      color: theme.playBg,
+                      fontSize: 48,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+              ),
+            ),
           if (_status == GameStatus.paused) _buildPauseOverlay(theme),
-          if (_status == GameStatus.gameOver) _buildEndOverlay(theme, isWin: false),
-          if (_status == GameStatus.victory) _buildEndOverlay(theme, isWin: true),
+          if (_status == GameStatus.gameOver)
+            _buildEndOverlay(theme, isWin: false),
+          if (_status == GameStatus.victory)
+            _buildEndOverlay(theme, isWin: true),
         ],
       ),
     );
@@ -649,7 +467,11 @@ class _GameScreenState extends State<GameScreen> with SingleTickerProviderStateM
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       IconButton(
-                        icon: Icon(Icons.arrow_back_ios_new_rounded, color: theme.textPrimary, size: 22),
+                        icon: Icon(
+                          Icons.arrow_back_ios_new_rounded,
+                          color: theme.textPrimary,
+                          size: 22,
+                        ),
                         onPressed: () {
                           Haptics.select();
                           Navigator.of(context).pop();
@@ -668,7 +490,10 @@ class _GameScreenState extends State<GameScreen> with SingleTickerProviderStateM
                           ),
                           if (_combo > 1)
                             Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 10,
+                                vertical: 2,
+                              ),
                               decoration: BoxDecoration(
                                 color: theme.playBg,
                                 borderRadius: BorderRadius.circular(12),
@@ -687,13 +512,16 @@ class _GameScreenState extends State<GameScreen> with SingleTickerProviderStateM
                       ),
                       IconButton(
                         icon: Icon(
-                          _status == GameStatus.paused ? Icons.play_arrow_rounded : Icons.pause_rounded,
+                          _status == GameStatus.paused
+                              ? Icons.play_arrow_rounded
+                              : Icons.pause_rounded,
                           color: theme.textPrimary,
                           size: 28,
                         ),
                         onPressed: () {
                           Haptics.select();
-                          if (_status == GameStatus.playing || _status == GameStatus.ready) {
+                          if (_status == GameStatus.playing ||
+                              _status == GameStatus.ready) {
                             _pauseGame();
                           } else if (_status == GameStatus.paused) {
                             _resumeGame();
@@ -708,7 +536,9 @@ class _GameScreenState extends State<GameScreen> with SingleTickerProviderStateM
                     child: LinearProgressIndicator(
                       value: _songProgress,
                       minHeight: 6,
-                      backgroundColor: theme.surfaceVariant.withValues(alpha: 0.6),
+                      backgroundColor: theme.surfaceVariant.withValues(
+                        alpha: 0.6,
+                      ),
                       valueColor: AlwaysStoppedAnimation<Color>(theme.playBg),
                     ),
                   ),
@@ -762,7 +592,9 @@ class _GameScreenState extends State<GameScreen> with SingleTickerProviderStateM
                   foregroundColor: Colors.white,
                   minimumSize: const Size.fromHeight(54),
                   elevation: 0,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16),
+                  ),
                 ),
                 child: Text(
                   AppLocalizations.of(context).resume,
@@ -779,7 +611,9 @@ class _GameScreenState extends State<GameScreen> with SingleTickerProviderStateM
                 style: OutlinedButton.styleFrom(
                   minimumSize: const Size.fromHeight(50),
                   side: BorderSide(color: theme.border, width: 2),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16),
+                  ),
                 ),
                 child: Text(
                   AppLocalizations.of(context).home,
@@ -851,7 +685,10 @@ class _GameScreenState extends State<GameScreen> with SingleTickerProviderStateM
               ),
               const SizedBox(height: 16),
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 20,
+                  vertical: 12,
+                ),
                 decoration: BoxDecoration(
                   color: theme.surfaceVariant,
                   borderRadius: BorderRadius.circular(16),
@@ -861,16 +698,42 @@ class _GameScreenState extends State<GameScreen> with SingleTickerProviderStateM
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Text(AppLocalizations.of(context).score, style: TextStyle(color: theme.textMuted, fontWeight: FontWeight.w800)),
-                        Text('$_score', style: TextStyle(color: theme.textPrimary, fontWeight: FontWeight.w900, fontSize: 18)),
+                        Text(
+                          AppLocalizations.of(context).score,
+                          style: TextStyle(
+                            color: theme.textMuted,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                        Text(
+                          '$_score',
+                          style: TextStyle(
+                            color: theme.textPrimary,
+                            fontWeight: FontWeight.w900,
+                            fontSize: 18,
+                          ),
+                        ),
                       ],
                     ),
                     const SizedBox(height: 6),
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Text(AppLocalizations.of(context).bestScore, style: TextStyle(color: theme.textMuted, fontWeight: FontWeight.w800)),
-                        Text('$highScore', style: TextStyle(color: theme.textPrimary, fontWeight: FontWeight.w900, fontSize: 18)),
+                        Text(
+                          AppLocalizations.of(context).bestScore,
+                          style: TextStyle(
+                            color: theme.textMuted,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                        Text(
+                          '$highScore',
+                          style: TextStyle(
+                            color: theme.textPrimary,
+                            fontWeight: FontWeight.w900,
+                            fontSize: 18,
+                          ),
+                        ),
                       ],
                     ),
                   ],
@@ -884,11 +747,15 @@ class _GameScreenState extends State<GameScreen> with SingleTickerProviderStateM
                   setState(() {});
                 },
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: isWin ? theme.playBg : const Color(0xFFEF4444),
+                  backgroundColor: isWin
+                      ? theme.playBg
+                      : const Color(0xFFEF4444),
                   foregroundColor: Colors.white,
                   minimumSize: const Size.fromHeight(54),
                   elevation: 0,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16),
+                  ),
                 ),
                 child: Text(
                   isWin
@@ -907,7 +774,9 @@ class _GameScreenState extends State<GameScreen> with SingleTickerProviderStateM
                 style: OutlinedButton.styleFrom(
                   minimumSize: const Size.fromHeight(50),
                   side: BorderSide(color: theme.border, width: 2),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16),
+                  ),
                 ),
                 child: Text(
                   AppLocalizations.of(context).home,
@@ -967,11 +836,21 @@ class _GameTilesPainter extends CustomPainter {
     final targetLinePaint = Paint()
       ..color = appTheme.playBg.withValues(alpha: 0.55)
       ..strokeWidth = 2.5;
-    canvas.drawLine(Offset(0, targetLineY), Offset(size.width, targetLineY), targetLinePaint);
+    canvas.drawLine(
+      Offset(0, targetLineY),
+      Offset(size.width, targetLineY),
+      targetLinePaint,
+    );
 
     if (failedLane >= 0) {
-      final failRect = Rect.fromLTWH(failedLane * laneWidth, 0, laneWidth, size.height);
-      final failPaint = Paint()..color = const Color(0xFFEF4444).withValues(alpha: 0.35);
+      final failRect = Rect.fromLTWH(
+        failedLane * laneWidth,
+        0,
+        laneWidth,
+        size.height,
+      );
+      final failPaint = Paint()
+        ..color = const Color(0xFFEF4444).withValues(alpha: 0.35);
       canvas.drawRect(failRect, failPaint);
     }
 
@@ -982,10 +861,16 @@ class _GameTilesPainter extends CustomPainter {
       final tileHeight = size.height * tileHeightFactor * tile.length;
       final tileY = (tile.y * size.height) - tileHeight;
 
-      final rect = Rect.fromLTWH(tileX + 2.0, tileY, laneWidth - 4.0, tileHeight);
+      final rect = Rect.fromLTWH(
+        tileX + 2.0,
+        tileY,
+        laneWidth - 4.0,
+        tileHeight,
+      );
 
       if (tile.isLong) {
-        final tailPaint = Paint()..color = appTheme.tileTailColor.withValues(alpha: 0.70);
+        final tailPaint = Paint()
+          ..color = appTheme.tileTailColor.withValues(alpha: 0.70);
         canvas.drawRect(rect, tailPaint);
 
         if (tile.isHolding) {
@@ -996,14 +881,19 @@ class _GameTilesPainter extends CustomPainter {
             laneWidth - 4.0,
             progressHeight,
           );
-          final hitFillPaint = Paint()..color = appTheme.tileHitColor.withValues(alpha: 0.85);
+          final hitFillPaint = Paint()
+            ..color = appTheme.tileHitColor.withValues(alpha: 0.85);
           canvas.drawRect(filledRect, hitFillPaint);
 
           final contactY = tileY + tileHeight - progressHeight;
           final sparkPaint = Paint()
             ..color = Colors.white
             ..strokeWidth = 3.0;
-          canvas.drawLine(Offset(tileX + 3.0, contactY), Offset(tileX + laneWidth - 3.0, contactY), sparkPaint);
+          canvas.drawLine(
+            Offset(tileX + 3.0, contactY),
+            Offset(tileX + laneWidth - 3.0, contactY),
+            sparkPaint,
+          );
         }
 
         final borderPaint = Paint()
@@ -1014,21 +904,32 @@ class _GameTilesPainter extends CustomPainter {
 
         final centerX = tileX + laneWidth / 2;
         final circleRadius = min(16.0, (laneWidth - 14) / 2);
-        final circleCenter = Offset(centerX, tileY + tileHeight - circleRadius - 8);
+        final circleCenter = Offset(
+          centerX,
+          tileY + tileHeight - circleRadius - 8,
+        );
         final lineTop = tileY + 8;
         final lineBottom = circleCenter.dy - circleRadius;
 
         if (lineBottom > lineTop) {
           final linePaint = Paint()
-            ..color = Colors.white.withValues(alpha: tile.isHolding ? 0.95 : 0.75)
+            ..color = Colors.white.withValues(
+              alpha: tile.isHolding ? 0.95 : 0.75,
+            )
             ..strokeWidth = 3.5
             ..strokeCap = StrokeCap.round;
-          canvas.drawLine(Offset(centerX, lineTop), Offset(centerX, lineBottom), linePaint);
+          canvas.drawLine(
+            Offset(centerX, lineTop),
+            Offset(centerX, lineBottom),
+            linePaint,
+          );
           canvas.drawCircle(Offset(centerX, lineTop), 3.5, linePaint);
         }
 
         final circlePaint = Paint()
-          ..color = tile.isHolding ? appTheme.tileHitColor : Colors.white.withValues(alpha: 0.95)
+          ..color = tile.isHolding
+              ? appTheme.tileHitColor
+              : Colors.white.withValues(alpha: 0.95)
           ..style = PaintingStyle.fill;
         canvas.drawCircle(circleCenter, circleRadius, circlePaint);
 
@@ -1113,7 +1014,10 @@ class _GameTilesPainter extends CustomPainter {
         textDirection: TextDirection.ltr,
       )..layout();
 
-      tp.paint(canvas, Offset(fb.x - (tp.width / 2), fb.y - floatOffset - (tp.height / 2)));
+      tp.paint(
+        canvas,
+        Offset(fb.x - (tp.width / 2), fb.y - floatOffset - (tp.height / 2)),
+      );
     }
   }
 

@@ -164,11 +164,10 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get singleTapPoint1 =>
-      'Tap when the tile reaches the white judgment line.';
+      'Tap the correct lane as the lower edge of the tile reaches the judgment line.';
 
   @override
-  String get singleTapPoint2 =>
-      'Tapping closer to the center gives PERFECT! rating.';
+  String get singleTapPoint2 => 'Timing within 50 ms gives a PERFECT rating.';
 
   @override
   String get singleTapPoint3 => 'A single tap clears the tile immediately.';
@@ -228,4 +227,31 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get gotItLetsPlay => 'GOT IT, LET\'S PLAY!';
+
+  @override
+  String get analyzeNow => 'Analyze now';
+
+  @override
+  String get analyzingSong => 'Analyzing notes and rhythm…';
+
+  @override
+  String get analysisHint =>
+      'Analyze this song before playing. Results are saved on this device.';
+
+  @override
+  String get analysisReady => 'Rhythm ready';
+
+  @override
+  String get analysisFailed => 'Analysis failed. Try another audio file.';
+
+  @override
+  String get noBeatsFound => 'No distinct notes or beats found.';
+
+  @override
+  String get startRhythm =>
+      'Tap START. Tiles arrive with the music after a short lead-in.';
+
+  @override
+  String get rhythmDifficulty =>
+      'Later in the song, tiles scroll faster and more detected notes are included.';
 }

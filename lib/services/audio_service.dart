@@ -1,4 +1,5 @@
 import 'package:audioplayers/audioplayers.dart';
+
 import 'storage_service.dart';
 
 class AudioService {
@@ -8,6 +9,15 @@ class AudioService {
 
   final AudioPlayer _musicPlayer = AudioPlayer();
   Duration? _currentDuration;
+  Future<void> _pending = Future<void>.value();
+
+  // Serialize source changes with pause/stop so leaving a screen while a file
+  // loads cannot start old audio after the next screen has already stopped it.
+  Future<void> _enqueue(Future<void> Function() action) {
+    final next = _pending.then((_) => action());
+    _pending = next.catchError((Object _) {});
+    return next;
+  }
 
   Duration? get currentDuration => _currentDuration;
   Stream<Duration> get onDurationChanged => _musicPlayer.onDurationChanged;
@@ -16,7 +26,7 @@ class AudioService {
 
   Future<void> init() async {
     await _musicPlayer.setReleaseMode(ReleaseMode.stop);
-    await _musicPlayer.setVolume(1.0);
+    await _musicPlayer.setVolume(StorageService.getSoundEnabled() ? 1.0 : 0.0);
     await _musicPlayer.setPlaybackRate(1.0);
     _musicPlayer.onDurationChanged.listen((d) {
       _currentDuration = d;
@@ -59,44 +69,33 @@ class AudioService {
     }
   }
 
-  Future<void> playSong(String audioPath) async {
-    if (!StorageService.getSoundEnabled()) return;
-    try {
-      await _musicPlayer.stop();
-      await _musicPlayer.setVolume(1.0);
-      await _musicPlayer.setPlaybackRate(1.0);
-      if (audioPath.startsWith('assets/')) {
-        final cleanPath = audioPath.substring(7);
-        await _musicPlayer.play(AssetSource(cleanPath));
-      } else if (audioPath.startsWith('content://') ||
-          audioPath.startsWith('http://') ||
-          audioPath.startsWith('https://')) {
-        await _musicPlayer.play(UrlSource(audioPath));
-      } else {
-        await _musicPlayer.play(DeviceFileSource(audioPath));
-      }
-      _currentDuration = await _musicPlayer.getDuration();
-    } catch (_) {}
-  }
+  Future<void> playSong(String audioPath) => _enqueue(() async {
+    await _musicPlayer.stop();
+    await _musicPlayer.setVolume(StorageService.getSoundEnabled() ? 1.0 : 0.0);
+    await _musicPlayer.setPlaybackRate(1.0);
+    if (audioPath.startsWith('assets/')) {
+      await _musicPlayer.play(AssetSource(audioPath.substring(7)));
+    } else if (audioPath.startsWith('content://') ||
+        audioPath.startsWith('http://') ||
+        audioPath.startsWith('https://')) {
+      await _musicPlayer.play(UrlSource(audioPath));
+    } else {
+      await _musicPlayer.play(DeviceFileSource(audioPath));
+    }
+    _currentDuration = await _musicPlayer.getDuration();
+  });
 
-  Future<void> pauseSong() async {
-    try {
-      await _musicPlayer.pause();
-    } catch (_) {}
-  }
+  Future<void> pauseSong() => _enqueue(() async {
+    await _musicPlayer.pause();
+  });
 
-  Future<void> resumeSong() async {
-    if (!StorageService.getSoundEnabled()) return;
-    try {
-      await _musicPlayer.resume();
-    } catch (_) {}
-  }
+  Future<void> resumeSong() => _enqueue(() async {
+    await _musicPlayer.resume();
+  });
 
-  Future<void> stopSong() async {
-    try {
-      await _musicPlayer.stop();
-    } catch (_) {}
-  }
+  Future<void> stopSong() => _enqueue(() async {
+    await _musicPlayer.stop();
+  });
 
   Future<void> dispose() async {
     await _musicPlayer.dispose();
