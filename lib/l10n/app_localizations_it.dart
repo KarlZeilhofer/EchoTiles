@@ -165,11 +165,11 @@ class AppLocalizationsIt extends AppLocalizations {
 
   @override
   String get singleTapPoint1 =>
-      'Tocca la corsia corretta quando il segno centrale della tessera raggiunge la linea.';
+      'Tocca la tessera visibile nella sua corsia, come nel gioco originale F-Droid.';
 
   @override
   String get singleTapPoint2 =>
-      'Un tocco entro 50 ms dà una valutazione PERFECT.';
+      'Una tessera sovrapposta alla linea dà una valutazione PERFECT.';
 
   @override
   String get singleTapPoint3 => 'Un singolo tocco rimuove subito il tile.';
@@ -183,15 +183,15 @@ class AppLocalizationsIt extends AppLocalizations {
 
   @override
   String get holdTilesPoint1 =>
-      'Premi il cerchio quando raggiunge la linea e tieni premuto finché arriva la coda.';
+      'Solo le note di almeno 1 secondo diventano tessere da tenere premute.';
 
   @override
   String get holdTilesPoint2 =>
-      'La lunghezza della coda segue la durata della nota. Rilasciare troppo presto termina la partita.';
+      'Tieni premuto per ottenere punti bonus. Rilasciare prima non termina la partita.';
 
   @override
   String get holdTilesPoint3 =>
-      'Dopo una pausa, tocca di nuovo la corsia tenuta quando riprendi.';
+      'Tieni premuto finché la coda raggiunge la linea per il bonus completo.';
 
   @override
   String get avoidMistakesTitle => 'EVITA GLI ERRORI';

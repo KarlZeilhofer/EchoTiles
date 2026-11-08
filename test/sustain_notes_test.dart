@@ -71,6 +71,27 @@ void main() {
     },
   );
 
+  test('slider minimum is one second, also for saved v2 analyses', () {
+    final analysis = chart(const [
+      AnalyzedNote(0, 0, duration: 0.4),
+      AnalyzedNote(1, 1, duration: 0.8),
+      AnalyzedNote(2, 2, duration: 0.999),
+      AnalyzedNote(4, 3, duration: 1.0),
+      AnalyzedNote(7, 0, duration: 1.5),
+    ]);
+    expect(analysis.notes.map((n) => n.isLong), [
+      false,
+      false,
+      false,
+      true,
+      true,
+    ]);
+    expect(
+      SongAnalysis.fromJson(analysis.toJson()).notes.map((n) => n.isLong),
+      [false, false, false, true, true],
+    );
+  });
+
   test('invalid or out-of-track durations are rejected', () {
     for (final length in [-1.0, double.nan, double.infinity, 20.0]) {
       expect(

@@ -68,7 +68,7 @@ class GameTile {
   final int lane;
   double y;
   double endY;
-  final double length;
+  double length;
   final bool isLong;
   bool isHit;
   bool isHolding;

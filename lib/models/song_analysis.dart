@@ -3,7 +3,8 @@ class AnalyzedNote {
   final int lane;
   final double duration;
   const AnalyzedNote(this.time, this.lane, {this.duration = 0});
-  bool get isLong => duration >= 0.4;
+  static const minimumHoldDuration = 1.0;
+  bool get isLong => duration >= minimumHoldDuration;
   double get endTime => time + duration;
 
   Map<String, Object> toJson() => {
@@ -109,7 +110,7 @@ class SongAnalysis {
         result[index] = AnalyzedNote(
           old.time,
           old.lane,
-          duration: length >= 0.4 ? length : 0,
+          duration: length >= AnalyzedNote.minimumHoldDuration ? length : 0,
         );
         free = [lane];
       }

@@ -31,21 +31,24 @@ Re-analysis is available through the same button. Analysis can be cancelled.
   heights/second (2.5×). Notes still arrive at the judgment line on their detected
   audio timestamps; the audio itself is not sped up. Sparse passages stay sparse.
 - Version 1.2.0 detects dominant sustained tones using narrow-band energy,
-  stable spectral peaks, relative RMS decay and pitch changes. Sustains of at
-  least 400 ms become holds; short decaying hits and broadband noise stay taps.
+  stable spectral peaks, relative RMS decay and pitch changes. Measured sustains of at
+  least **1 second** become holds (since 1.2.1); shorter notes stay tap tiles,
+  including existing saved charts.
   This is a conservative estimate in mixed music, not polyphonic transcription.
   Re-run **Analyze now** once to add durations to an older chart (v1 charts
   remain playable). Slider head and tail use the detected onset and offset;
   their spatial length scales with the current scroll speed. Hold one finger
-  until the tail reaches the line; releasing up to 120 ms early is tolerated.
-  After a pause, held lanes can be re-grabbed within 500 ms.
-- Single-tap and hold starts use the same musical timing judgment.
-  PERFECT/ GREAT/ GOOD timing windows are 50/100/220 ms. The tile's center mark
-  crosses the judgment line at the onset. The line sits at 55% of playfield
-  height from the top (45% from the bottom), shared by rendering and timing. Touch hardware timestamps compensate
-  up to 120 ms of input dispatch delay; misses wait for that grace period.
-  A small lane-edge tolerance and 80 ms same-lane bounce suppression prevent
-  accidental extra failures.
+  until the tail reaches the line for the full bonus. As in the original,
+  early release, moving out of a lane or touch cancellation clears the tile
+  without ending the run.
+- **Version 1.2.1 restores the original F-Droid 1.0.0 spatial hit test** from
+  [upstream commit 6829d30](https://github.com/sidhant947/EchoTiles/blob/6829d30c6975e9ac213cb62f7e7e02c63b4dd1bb/lib/screens/game_screen.dart):
+  bottom-anchored rectangles, 0.08 screen-height direct-tap padding, 0.18
+  target-line tolerance, lowest candidate first, geometric rating thresholds
+  0.05/0.11, and missed-tile boundary at y > 1.02. Painting and input share
+  identical bounds. There is no independent millisecond hit gate, timestamp
+  correction, cross-lane tolerance or premature beat-based miss timeout.
+  The judgment line remains at 55% from the top (45% from the bottom).
 - Versioned JSON charts are saved in app-private files and reused after restart.
   Local file size/modification time is checked when loading from disk. Analyze
   again if a content-URI recording has been replaced. Songs longer than one hour
@@ -79,7 +82,8 @@ flutter test integration_test -d emulator-5554
 The native tests check synthetic beat alignment, tempo, silence, edge notes,
 progressive density, measured sustain lengths, pitch changes and noise rejection.
 Device tests decode WAV/MP3, complete both a tap track and a hold track, verify
-pause/re-grab, and check that releasing a slider early ends the run.
+pause while holding, tap on still-visible tiles after the former timing window,
+and verify that early slider release allows the song to finish.
 
 Release signing uses `android/key.properties` when supplied; otherwise this
 experimental fork uses the local Android debug key. Never replace the original

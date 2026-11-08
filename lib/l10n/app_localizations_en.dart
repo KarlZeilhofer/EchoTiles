@@ -164,10 +164,11 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get singleTapPoint1 =>
-      'Tap the correct lane when the center mark of the tile reaches the judgment line.';
+      'Tap the visible tile in its lane, just like the original F-Droid game.';
 
   @override
-  String get singleTapPoint2 => 'Timing within 50 ms gives a PERFECT rating.';
+  String get singleTapPoint2 =>
+      'A tile overlapping the judgment line gives a PERFECT rating.';
 
   @override
   String get singleTapPoint3 => 'A single tap clears the tile immediately.';
@@ -181,15 +182,15 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get holdTilesPoint1 =>
-      'Press the circle as it reaches the line, and hold until the tail reaches the line.';
+      'Only notes lasting at least 1 second become hold tiles.';
 
   @override
   String get holdTilesPoint2 =>
-      'The tail length follows the detected note duration. Releasing too early ends the run.';
+      'Keep holding for bonus points. Releasing early does not end your run.';
 
   @override
   String get holdTilesPoint3 =>
-      'After pausing, touch the held lane again when you resume.';
+      'Hold until the tail reaches the line for the full bonus.';
 
   @override
   String get avoidMistakesTitle => 'AVOID MISTAKES';

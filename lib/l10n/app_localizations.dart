@@ -395,13 +395,13 @@ abstract class AppLocalizations {
   /// No description provided for @singleTapPoint1.
   ///
   /// In en, this message translates to:
-  /// **'Tap the correct lane when the center mark of the tile reaches the judgment line.'**
+  /// **'Tap the visible tile in its lane, just like the original F-Droid game.'**
   String get singleTapPoint1;
 
   /// No description provided for @singleTapPoint2.
   ///
   /// In en, this message translates to:
-  /// **'Timing within 50 ms gives a PERFECT rating.'**
+  /// **'A tile overlapping the judgment line gives a PERFECT rating.'**
   String get singleTapPoint2;
 
   /// No description provided for @singleTapPoint3.
@@ -425,19 +425,19 @@ abstract class AppLocalizations {
   /// No description provided for @holdTilesPoint1.
   ///
   /// In en, this message translates to:
-  /// **'Press the circle as it reaches the line, and hold until the tail reaches the line.'**
+  /// **'Only notes lasting at least 1 second become hold tiles.'**
   String get holdTilesPoint1;
 
   /// No description provided for @holdTilesPoint2.
   ///
   /// In en, this message translates to:
-  /// **'The tail length follows the detected note duration. Releasing too early ends the run.'**
+  /// **'Keep holding for bonus points. Releasing early does not end your run.'**
   String get holdTilesPoint2;
 
   /// No description provided for @holdTilesPoint3.
   ///
   /// In en, this message translates to:
-  /// **'After pausing, touch the held lane again when you resume.'**
+  /// **'Hold until the tail reaches the line for the full bonus.'**
   String get holdTilesPoint3;
 
   /// No description provided for @avoidMistakesTitle.

@@ -118,15 +118,22 @@ void main() {
         }
         final position = await AudioService.instance.getCurrentPosition();
         if (position != null &&
-            position.inMicroseconds / 1000000 >= note.time - 0.025) {
+            RhythmTimeline.position(
+                  note.time,
+                  position.inMicroseconds / 1000000,
+                  clicks.duration,
+                ) >=
+                RhythmTimeline.targetLineFactor + 0.20) {
           break;
         }
         await Future<void>.delayed(const Duration(milliseconds: 20));
       }
+      // Tap the painted body below the judgment line, after the old time
+      // window would already have rejected it (the reported regression).
       await tester.tapAt(
         Offset(
           gameSize.width * (note.lane + 0.5) / 4,
-          gameSize.height * RhythmTimeline.targetLineFactor,
+          gameSize.height * (RhythmTimeline.targetLineFactor + 0.10),
         ),
       );
       await tester.pump();
