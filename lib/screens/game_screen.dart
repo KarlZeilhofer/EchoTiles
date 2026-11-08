@@ -50,6 +50,9 @@ class _GameScreenState extends State<GameScreen>
   GameStatus _status = GameStatus.ready;
   final List<GameTile> _tiles = [];
   final List<HitFeedback> _feedbacks = [];
+  final Map<int, int> _activeHolds = {};
+  final Set<int> _suspendedHolds = {};
+  double _regrabDeadline = double.infinity;
   int _score = 0;
   int _combo = 0;
   int _maxCombo = 0;
@@ -109,6 +112,8 @@ class _GameScreenState extends State<GameScreen>
     _songProgress = 0;
     _tiles.clear();
     _feedbacks.clear();
+    _activeHolds.clear();
+    _suspendedHolds.clear();
     _tiles.add(
       GameTile(
         id: 0,
@@ -163,6 +168,7 @@ class _GameScreenState extends State<GameScreen>
           lane: note.lane,
           y: y,
           noteIndex: _nextTileIndex,
+          isLong: note.isLong,
         ),
       );
       _nextTileIndex++;
@@ -170,18 +176,37 @@ class _GameScreenState extends State<GameScreen>
     for (final tile in _tiles) {
       final note = analysis.notes[tile.noteIndex];
       tile.y = RhythmTimeline.position(note.time, time, analysis.duration);
+      tile.endY = RhythmTimeline.position(
+        note.endTime,
+        time,
+        analysis.duration,
+      );
+      if (tile.isHolding) {
+        tile.holdProgress = ((time - note.time) / note.duration).clamp(
+          0.0,
+          1.0,
+        );
+        if (_suspendedHolds.contains(tile.id)) {
+          if (time > _regrabDeadline) {
+            _triggerGameOver(tile.lane);
+            return;
+          }
+        } else if (time >= note.endTime) {
+          _finishHold(tile);
+        }
+      }
       if (!tile.isHit && RhythmJudgment.isOverdue(note.time, time)) {
         tile.isMissed = true;
         _triggerGameOver(tile.lane);
         return;
       }
     }
-    _tiles.removeWhere((t) => t.isHit && t.y > 1.3);
+    _tiles.removeWhere((t) => t.isHit && !t.isHolding && t.y > 1.3);
     final now = DateTime.now().millisecondsSinceEpoch;
     _feedbacks.removeWhere((f) => now - f.timestamp > 700);
     if (time >= analysis.duration &&
         _nextTileIndex == analysis.notes.length &&
-        _tiles.every((t) => t.isHit)) {
+        _tiles.every((t) => t.isHit && !t.isHolding)) {
       _triggerVictory();
       return;
     }
@@ -216,6 +241,7 @@ class _GameScreenState extends State<GameScreen>
     }
     if (!mounted || _status != GameStatus.paused) return;
     setState(() => _status = GameStatus.playing);
+    _regrabDeadline = _time + 0.5;
     if (!_audioStarting) _clock.resume();
     _ticker.start();
   }
@@ -284,6 +310,14 @@ class _GameScreenState extends State<GameScreen>
       frameTime: _lastFrameTimestamp,
       elapsedSinceFrame: _monotonicTime - _lastFrameMonotonic,
     );
+    final held = _tiles.where((t) => t.isHolding && t.lane == lane).firstOrNull;
+    if (held != null) {
+      if (!_activeHolds.containsValue(held.id)) {
+        _activeHolds[event.pointer] = held.id;
+      }
+      _suspendedHolds.remove(held.id);
+      return;
+    }
     final laneWidth = screenSize.width / 4;
     final edgeTolerance = min(10.0, laneWidth * 0.10);
     GameTile? tile;
@@ -329,6 +363,10 @@ class _GameScreenState extends State<GameScreen>
             : 50) +
         _combo * 2;
     tile.isHit = true;
+    if (tile.isLong) {
+      tile.isHolding = true;
+      _activeHolds[event.pointer] = tile.id;
+    }
     Haptics.light();
     _feedbacks.add(
       HitFeedback(
@@ -339,6 +377,50 @@ class _GameScreenState extends State<GameScreen>
       ),
     );
     setState(() {});
+  }
+
+  void _finishHold(GameTile tile) {
+    tile.isHolding = false;
+    tile.isHit = true;
+    tile.holdProgress = 1;
+    _activeHolds.removeWhere((_, id) => id == tile.id);
+    _suspendedHolds.remove(tile.id);
+    _score +=
+        150 + (widget.analysis.notes[tile.noteIndex].duration * 100).round();
+    Haptics.medium();
+  }
+
+  void _onPointerUp(PointerEvent event) {
+    final id = _activeHolds.remove(event.pointer);
+    if (id == null) return;
+    final tile = _tiles.where((t) => t.id == id && t.isHolding).firstOrNull;
+    if (tile == null) return;
+    if (_status == GameStatus.paused) {
+      _suspendedHolds.add(id);
+      return;
+    }
+    if (_status != GameStatus.playing) return;
+    final inputTime = RhythmJudgment.inputTime(
+      songTime: _time,
+      eventTime: event.timeStamp,
+      frameTime: _lastFrameTimestamp,
+      elapsedSinceFrame: _monotonicTime - _lastFrameMonotonic,
+    );
+    if (widget.analysis.notes[tile.noteIndex].endTime - inputTime <=
+        RhythmJudgment.inputGrace) {
+      _finishHold(tile);
+      setState(() {});
+    } else {
+      _triggerGameOver(tile.lane);
+    }
+  }
+
+  void _onPointerCancel(PointerCancelEvent event) {
+    // System gestures/backgrounding must not count as an early release.
+    if (_activeHolds.containsKey(event.pointer)) {
+      _pauseGame();
+      _onPointerUp(event);
+    }
   }
 
   @override
@@ -376,6 +458,8 @@ class _GameScreenState extends State<GameScreen>
                 final size = Size(constraints.maxWidth, constraints.maxHeight);
                 return Listener(
                   onPointerDown: (e) => _onPointerDown(e, size),
+                  onPointerUp: _onPointerUp,
+                  onPointerCancel: _onPointerCancel,
                   child: RepaintBoundary(
                     child: CustomPaint(
                       size: size,
@@ -864,80 +948,53 @@ class _GameTilesPainter extends CustomPainter {
       );
 
       if (tile.isLong) {
-        final tailPaint = Paint()
-          ..color = appTheme.tileTailColor.withValues(alpha: 0.70);
-        canvas.drawRect(rect, tailPaint);
-
-        if (tile.isHolding) {
-          final progressHeight = tileHeight * tile.holdProgress;
-          final filledRect = Rect.fromLTWH(
-            tileX + 2.0,
-            tileY + tileHeight - progressHeight,
-            laneWidth - 4.0,
-            progressHeight,
-          );
-          final hitFillPaint = Paint()
-            ..color = appTheme.tileHitColor.withValues(alpha: 0.85);
-          canvas.drawRect(filledRect, hitFillPaint);
-
-          final contactY = tileY + tileHeight - progressHeight;
-          final sparkPaint = Paint()
-            ..color = Colors.white
-            ..strokeWidth = 3.0;
-          canvas.drawLine(
-            Offset(tileX + 3.0, contactY),
-            Offset(tileX + laneWidth - 3.0, contactY),
-            sparkPaint,
-          );
-        }
-
-        final borderPaint = Paint()
-          ..color = tile.isHolding ? appTheme.tileHitColor : appTheme.tileBorder
-          ..style = PaintingStyle.stroke
-          ..strokeWidth = 2.0;
-        canvas.drawRect(rect, borderPaint);
-
+        final headY = tile.isHolding ? targetLineY : tile.y * size.height;
+        final tailY = min(headY, tile.endY * size.height);
         final centerX = tileX + laneWidth / 2;
-        final circleRadius = min(16.0, (laneWidth - 14) / 2);
-        final circleCenter = Offset(
-          centerX,
-          tileY + tileHeight - circleRadius - 8,
+        final radius = min(20.0, laneWidth * 0.23);
+        final tail = Rect.fromLTRB(
+          tileX + laneWidth * 0.18,
+          tailY,
+          tileX + laneWidth * 0.82,
+          headY,
         );
-        final lineTop = tileY + 8;
-        final lineBottom = circleCenter.dy - circleRadius;
-
-        if (lineBottom > lineTop) {
-          final linePaint = Paint()
-            ..color = Colors.white.withValues(
-              alpha: tile.isHolding ? 0.95 : 0.75,
-            )
-            ..strokeWidth = 3.5
-            ..strokeCap = StrokeCap.round;
-          canvas.drawLine(
-            Offset(centerX, lineTop),
-            Offset(centerX, lineBottom),
-            linePaint,
+        final fill = Paint()
+          ..color =
+              (tile.isHolding ? appTheme.tileHitColor : appTheme.tileTailColor)
+                  .withValues(alpha: 0.75);
+        canvas.drawRRect(
+          RRect.fromRectAndRadius(tail, const Radius.circular(8)),
+          fill,
+        );
+        final stem = Paint()
+          ..color = Colors.white.withValues(alpha: 0.8)
+          ..strokeWidth = 3
+          ..strokeCap = StrokeCap.round;
+        canvas.drawLine(Offset(centerX, tailY), Offset(centerX, headY), stem);
+        final head = Paint()
+          ..color = tile.isHolding ? appTheme.tileHitColor : appTheme.tileColor;
+        canvas.drawCircle(Offset(centerX, headY), radius, head);
+        canvas.drawCircle(
+          Offset(centerX, headY),
+          radius,
+          Paint()
+            ..color = Colors.white
+            ..style = PaintingStyle.stroke
+            ..strokeWidth = 3,
+        );
+        canvas.drawCircle(Offset(centerX, tailY), 5, stem);
+        if (tile.isHolding) {
+          canvas.drawArc(
+            Rect.fromCircle(center: Offset(centerX, headY), radius: radius + 5),
+            -pi / 2,
+            2 * pi * tile.holdProgress,
+            false,
+            Paint()
+              ..color = appTheme.playBg
+              ..style = PaintingStyle.stroke
+              ..strokeWidth = 3,
           );
-          canvas.drawCircle(Offset(centerX, lineTop), 3.5, linePaint);
         }
-
-        final circlePaint = Paint()
-          ..color = tile.isHolding
-              ? appTheme.tileHitColor
-              : Colors.white.withValues(alpha: 0.95)
-          ..style = PaintingStyle.fill;
-        canvas.drawCircle(circleCenter, circleRadius, circlePaint);
-
-        final circleBorder = Paint()
-          ..color = tile.isHolding ? Colors.white : appTheme.tileBorder
-          ..style = PaintingStyle.stroke
-          ..strokeWidth = 2.5;
-        canvas.drawCircle(circleCenter, circleRadius, circleBorder);
-
-        final innerDot = Paint()
-          ..color = tile.isHolding ? Colors.white : appTheme.tileColor
-          ..style = PaintingStyle.fill;
-        canvas.drawCircle(circleCenter, circleRadius * 0.45, innerDot);
       } else {
         final tilePaint = Paint()..color = appTheme.tileColor;
         canvas.drawRect(rect, tilePaint);

@@ -181,15 +181,15 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get holdTilesPoint1 =>
-      'Tap the circle head when it hits the line, then keep holding.';
+      'Press the circle as it reaches the line, and hold until the tail reaches the line.';
 
   @override
   String get holdTilesPoint2 =>
-      'Holding charges bonus points and builds your combo.';
+      'The tail length follows the detected note duration. Releasing too early ends the run.';
 
   @override
   String get holdTilesPoint3 =>
-      'Releasing early won\'t cause a game over—any tap or hold is valid!';
+      'After pausing, touch the held lane again when you resume.';
 
   @override
   String get avoidMistakesTitle => 'AVOID MISTAKES';
@@ -254,4 +254,7 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get rhythmDifficulty =>
       'Later in the song, tiles scroll faster and more detected notes are included.';
+
+  @override
+  String get analyzeHoldsHint => 'Analyze again to detect long notes.';
 }

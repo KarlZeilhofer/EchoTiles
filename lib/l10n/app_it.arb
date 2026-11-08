@@ -68,9 +68,9 @@
   "singleTapPoint3": "Un singolo tocco rimuove subito il tile.",
   "holdTilesTitle": "TIENI PREMUTO I TILES",
   "holdTilesSubtitle": "Riconoscibili dalla testa circolare e dalla linea retta.",
-  "holdTilesPoint1": "Tocca la testa circolare quando raggiunge la linea, poi tieni premuto.",
-  "holdTilesPoint2": "Mantenere premuto carica punti bonus e aumenta il tuo combo.",
-  "holdTilesPoint3": "Rilasciare in anticipo non causa game over: qualsiasi tocco o pressione prolungata è valida!",
+  "holdTilesPoint1": "Premi il cerchio quando raggiunge la linea e tieni premuto finché arriva la coda.",
+  "holdTilesPoint2": "La lunghezza della coda segue la durata della nota. Rilasciare troppo presto termina la partita.",
+  "holdTilesPoint3": "Dopo una pausa, tocca di nuovo la corsia tenuta quando riprendi.",
   "avoidMistakesTitle": "EVITA GLI ERRORI",
   "avoidMistakesSubtitle": "Non interrompere la tua canzone.",
   "avoidMistakesPoint1": "Non toccare mai una corsia vuota in cui non sta passando nessun tile.",
@@ -89,5 +89,6 @@
   "analysisFailed": "Analisi non riuscita. Prova un altro file audio.",
   "noBeatsFound": "Nessuna nota o battito distinto trovato.",
   "startRhythm": "Tocca START. Le tessere seguono la musica dopo una breve introduzione.",
-  "rhythmDifficulty": "Più avanti nel brano, le tessere scorrono più velocemente e includono più note rilevate."
+  "rhythmDifficulty": "Più avanti nel brano, le tessere scorrono più velocemente e includono più note rilevate.",
+  "analyzeHoldsHint": "Analizza di nuovo per rilevare le note lunghe."
 }

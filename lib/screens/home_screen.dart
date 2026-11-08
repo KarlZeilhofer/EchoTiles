@@ -633,6 +633,17 @@ class _HomeScreenState extends State<HomeScreen> {
                                                   fontSize: 11,
                                                 ),
                                               ),
+                                            if (_analyses[song.id]
+                                                    ?.analysisVersion ==
+                                                1)
+                                              Text(
+                                                AppLocalizations.of(context)
+                                                    .analyzeHoldsHint,
+                                                style: TextStyle(
+                                                  color: theme.textMuted,
+                                                  fontSize: 11,
+                                                ),
+                                              ),
                                             TextButton.icon(
                                               onPressed: _busy
                                                   ? null

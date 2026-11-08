@@ -183,15 +183,15 @@ class AppLocalizationsIt extends AppLocalizations {
 
   @override
   String get holdTilesPoint1 =>
-      'Tocca la testa circolare quando raggiunge la linea, poi tieni premuto.';
+      'Premi il cerchio quando raggiunge la linea e tieni premuto finché arriva la coda.';
 
   @override
   String get holdTilesPoint2 =>
-      'Mantenere premuto carica punti bonus e aumenta il tuo combo.';
+      'La lunghezza della coda segue la durata della nota. Rilasciare troppo presto termina la partita.';
 
   @override
   String get holdTilesPoint3 =>
-      'Rilasciare in anticipo non causa game over: qualsiasi tocco o pressione prolungata è valida!';
+      'Dopo una pausa, tocca di nuovo la corsia tenuta quando riprendi.';
 
   @override
   String get avoidMistakesTitle => 'EVITA GLI ERRORI';
@@ -257,4 +257,8 @@ class AppLocalizationsIt extends AppLocalizations {
   @override
   String get rhythmDifficulty =>
       'Più avanti nel brano, le tessere scorrono più velocemente e includono più note rilevate.';
+
+  @override
+  String get analyzeHoldsHint =>
+      'Analizza di nuovo per rilevare le note lunghe.';
 }

@@ -19,7 +19,9 @@ Re-analysis is available through the same button. Analysis can be cancelled.
   flux, adaptive local threshold and peak picking. No whole-song PCM buffer.
 - Tiles follow actual detected onsets. Spectral brightness suggests a lane, then
   a deterministic allocator uses all four lanes in each group of four notes and
-  avoids consecutive notes in the same lane. Version 1.1.1 also applies this to
+  avoids consecutive notes in the same lane. Holds reserve their lanes; other
+  onsets use free lanes, with old holds shortened only if all four are occupied.
+  Version 1.1.1 also applies the lane balancing to
   existing saved charts automatically; **no re-analysis is required**.
   Musical onset times, density and progressive scroll speed are preserved;
   this is onset detection, **not polyphonic pitch transcription**. Tempo is an
@@ -28,7 +30,16 @@ Re-analysis is available through the same button. Analysis can be cancelled.
   to 140 ms at the end. Visual scrolling rises smoothly from 0.5 to 1.25 screen
   heights/second (2.5×). Notes still arrive at the judgment line on their detected
   audio timestamps; the audio itself is not sped up. Sparse passages stay sparse.
-- This mode uses single-tap notes rather than randomly generated holds/chords.
+- Version 1.2.0 detects dominant sustained tones using narrow-band energy,
+  stable spectral peaks, relative RMS decay and pitch changes. Sustains of at
+  least 400 ms become holds; short decaying hits and broadband noise stay taps.
+  This is a conservative estimate in mixed music, not polyphonic transcription.
+  Re-run **Analyze now** once to add durations to an older chart (v1 charts
+  remain playable). Slider head and tail use the detected onset and offset;
+  their spatial length scales with the current scroll speed. Hold one finger
+  until the tail reaches the line; releasing up to 120 ms early is tolerated.
+  After a pause, held lanes can be re-grabbed within 500 ms.
+- Single-tap and hold starts use the same musical timing judgment.
   PERFECT/ GREAT/ GOOD timing windows are 50/100/220 ms. The tile's center mark
   crosses the judgment line at the onset. The line sits at 55% of playfield
   height from the top (45% from the bottom), shared by rendering and timing. Touch hardware timestamps compensate
@@ -62,12 +73,13 @@ cd android && ./gradlew :app:testDebugUnitTest
 With an Android emulator/device connected:
 
 ```sh
-flutter test integration_test/rhythm_flow_test.dart -d emulator-5554
+flutter test integration_test -d emulator-5554
 ```
 
-The native tests check synthetic beat alignment, tempo, silence, edge notes and
-increasing note density. The device test decodes synthetic WAV and the bundled
-MP3, checks chart caching, and opens/pauses the game through the actual UI.
+The native tests check synthetic beat alignment, tempo, silence, edge notes,
+progressive density, measured sustain lengths, pitch changes and noise rejection.
+Device tests decode WAV/MP3, complete both a tap track and a hold track, verify
+pause/re-grab, and check that releasing a slider early ends the run.
 
 Release signing uses `android/key.properties` when supplied; otherwise this
 experimental fork uses the local Android debug key. Never replace the original

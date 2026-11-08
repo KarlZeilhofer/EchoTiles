@@ -10,7 +10,7 @@ class RhythmDetector {
         private const val WINDOW = 1024
         private const val HOP = 441
     }
-    private data class Frame(val time: Double, val flux: Double, val rms: Double, val pitch: Double)
+    private data class Frame(val time: Double, val flux: Double, val rms: Double, val pitch: Double, val peakBin: Int, val tonality: Double)
     private val samples = DoubleArray(WINDOW)
     private val previous = DoubleArray(WINDOW / 2)
     private val window = DoubleArray(WINDOW) { 0.5 - 0.5 * cos(2 * PI * it / (WINDOW - 1)) }
@@ -43,15 +43,23 @@ class RhythmDetector {
         var flux = 0.0
         var weighted = 0.0
         var weight = 0.0
+        val power = DoubleArray(WINDOW / 2)
+        var totalPower = 0.0
+        var peakBin = 2
         for (i in 2 until WINDOW / 2) {
-            val magnitude = ln(1 + 10 * hypot(re[i], im[i]))
+            power[i] = re[i] * re[i] + im[i] * im[i]
+            totalPower += power[i]
+            if (power[i] > power[peakBin]) peakBin = i
+            val magnitude = ln(1 + 10 * sqrt(power[i]))
             flux += max(0.0, magnitude - previous[i])
             previous[i] = magnitude
             weighted += i * magnitude * magnitude
             weight += magnitude * magnitude
         }
+        val tonalPower = (max(2, peakBin - 1)..min(WINDOW / 2 - 1, peakBin + 1)).sumOf { power[it] }
         frames.add(Frame(max(0.0, (total - WINDOW / 2.0) / RATE), flux,
-            sqrt(energy / WINDOW), if (weight > 0) weighted / weight * RATE / WINDOW else 0.0))
+            sqrt(energy / WINDOW), if (weight > 0) weighted / weight * RATE / WINDOW else 0.0,
+            peakBin, if (totalPower > 0) tonalPower / totalPower else 0.0))
     }
 
     fun finish(duration: Double): Map<String, Any> {
@@ -81,12 +89,49 @@ class RhythmDetector {
             val minimumGap = 0.38 - 0.24 * progress
             if (selected.isEmpty() || peak.time - selected.last().time >= minimumGap) selected.add(peak)
         }
+        var previousToneEnd = 0.0
+        var previousToneBin = -1
         val notes = selected.map { f ->
             val lane = if (pitches.last() - pitches.first() < 20) 1 else
                 (1..3).count { f.pitch > pitches[min(pitches.lastIndex, pitches.size * it / 4)] }
-            mapOf("time" to f.time, "lane" to lane)
+            val index = frames.binarySearchBy(f.time) { it.time }.coerceAtLeast(0)
+            val sustain = if (f.time < previousToneEnd && abs(f.peakBin - previousToneBin) <= max(1, previousToneBin / 16))
+                0.0 to previousToneBin else estimateSustain(index, duration)
+            // An accent during an already-held tone should not start a second
+            // copy of that same sustained note. Other accents remain tap notes.
+            val duplicate = f.time < previousToneEnd && abs(sustain.second - previousToneBin) <= max(1, previousToneBin / 16)
+            val hold = if (duplicate) 0.0 else sustain.first
+            if (hold > 0) { previousToneEnd = f.time + hold; previousToneBin = sustain.second }
+            mapOf("time" to f.time, "lane" to lane, "duration" to hold)
         }
-        return mapOf("version" to 1, "duration" to duration, "bpm" to bpm, "notes" to notes)
+        return mapOf("version" to 2, "duration" to duration, "bpm" to bpm, "notes" to notes)
+    }
+
+    /** Conservative dominant-tone sustain: require a stable narrow-band sound,
+     * and stop at silence, a pitch change, or the track end. A quiet gap alone
+     * never turns a short percussion hit into a hold. */
+    private fun estimateSustain(onset: Int, duration: Double): Pair<Double, Int> {
+        val start = frames[onset].time
+        val attackEnd = min(frames.lastIndex, onset + 4)
+        val reference = (onset..attackEnd).maxOf { frames[it].rms }
+        val anchor = (min(onset + 1, attackEnd)..attackEnd).firstOrNull {
+            frames[it].tonality >= 0.45 && frames[it].rms >= reference * 0.35
+        } ?: return 0.0 to -1
+        val bin = frames[anchor].peakBin
+        var firstBad = -1
+        var end = duration
+        for (i in anchor..frames.lastIndex) {
+            val f = frames[i]
+            if (f.time > duration) break
+            val stable = f.rms >= max(0.002, reference * 0.18) && f.tonality >= 0.35 &&
+                abs(f.peakBin - bin) <= max(1, bin / 16)
+            if (stable) firstBad = -1 else {
+                if (firstBad < 0) firstBad = i
+                if (i - firstBad >= 2) { end = frames[firstBad].time; break }
+            }
+        }
+        val length = (end - start).coerceAtLeast(0.0)
+        return (if (length >= 0.4) length else 0.0) to bin
     }
 
     private fun estimateTempo(times: List<Double>): Double {

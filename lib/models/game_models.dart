@@ -23,10 +23,7 @@ class SongItem {
     this.stars = 0,
   });
 
-  SongItem copyWith({
-    int? highScore,
-    int? stars,
-  }) {
+  SongItem copyWith({int? highScore, int? stars}) {
     return SongItem(
       id: id,
       title: title,
@@ -70,6 +67,7 @@ class GameTile {
   final int id;
   final int lane;
   double y;
+  double endY;
   final double length;
   final bool isLong;
   bool isHit;
@@ -82,6 +80,7 @@ class GameTile {
     required this.id,
     required this.lane,
     required this.y,
+    this.endY = 0,
     this.length = 1.0,
     this.isLong = false,
     this.isHit = false,

@@ -68,9 +68,9 @@
   "singleTapPoint3": "A single tap clears the tile immediately.",
   "holdTilesTitle": "HOLD TILES",
   "holdTilesSubtitle": "Identified by the circle head and straight line.",
-  "holdTilesPoint1": "Tap the circle head when it hits the line, then keep holding.",
-  "holdTilesPoint2": "Holding charges bonus points and builds your combo.",
-  "holdTilesPoint3": "Releasing early won't cause a game over—any tap or hold is valid!",
+  "holdTilesPoint1": "Press the circle as it reaches the line, and hold until the tail reaches the line.",
+  "holdTilesPoint2": "The tail length follows the detected note duration. Releasing too early ends the run.",
+  "holdTilesPoint3": "After pausing, touch the held lane again when you resume.",
   "avoidMistakesTitle": "AVOID MISTAKES",
   "avoidMistakesSubtitle": "Keep your song streak alive.",
   "avoidMistakesPoint1": "Never tap an empty lane where no tile is passing.",
@@ -89,5 +89,6 @@
   "analysisFailed": "Analysis failed. Try another audio file.",
   "noBeatsFound": "No distinct notes or beats found.",
   "startRhythm": "Tap START. Tiles arrive with the music after a short lead-in.",
-  "rhythmDifficulty": "Later in the song, tiles scroll faster and more detected notes are included."
+  "rhythmDifficulty": "Later in the song, tiles scroll faster and more detected notes are included.",
+  "analyzeHoldsHint": "Analyze again to detect long notes."
 }

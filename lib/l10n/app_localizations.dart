@@ -425,19 +425,19 @@ abstract class AppLocalizations {
   /// No description provided for @holdTilesPoint1.
   ///
   /// In en, this message translates to:
-  /// **'Tap the circle head when it hits the line, then keep holding.'**
+  /// **'Press the circle as it reaches the line, and hold until the tail reaches the line.'**
   String get holdTilesPoint1;
 
   /// No description provided for @holdTilesPoint2.
   ///
   /// In en, this message translates to:
-  /// **'Holding charges bonus points and builds your combo.'**
+  /// **'The tail length follows the detected note duration. Releasing too early ends the run.'**
   String get holdTilesPoint2;
 
   /// No description provided for @holdTilesPoint3.
   ///
   /// In en, this message translates to:
-  /// **'Releasing early won\'t cause a game over—any tap or hold is valid!'**
+  /// **'After pausing, touch the held lane again when you resume.'**
   String get holdTilesPoint3;
 
   /// No description provided for @avoidMistakesTitle.
@@ -553,6 +553,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Later in the song, tiles scroll faster and more detected notes are included.'**
   String get rhythmDifficulty;
+
+  /// No description provided for @analyzeHoldsHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Analyze again to detect long notes.'**
+  String get analyzeHoldsHint;
 }
 
 class _AppLocalizationsDelegate

@@ -61,6 +61,18 @@ class HowToPlayScreen extends StatelessWidget {
             const SizedBox(height: 18),
             _buildCard(
               theme: theme,
+              title: l10n.holdTilesTitle,
+              subtitle: l10n.holdTilesSubtitle,
+              visual: Icon(Icons.swipe_down_alt, size: 64, color: theme.playBg),
+              points: [
+                l10n.holdTilesPoint1,
+                l10n.holdTilesPoint2,
+                l10n.holdTilesPoint3,
+              ],
+            ),
+            const SizedBox(height: 18),
+            _buildCard(
+              theme: theme,
               title: l10n.analyzeNow,
               subtitle: l10n.analysisHint,
               visual: Icon(Icons.graphic_eq, size: 64, color: theme.playBg),
