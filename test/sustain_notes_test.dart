@@ -52,6 +52,7 @@ void main() {
               n.endTime + SongAnalysis.thumbReleaseGap > note.time + 1e-6,
         );
         expect(active.length, lessThanOrEqualTo(2));
+        expect(active.map((n) => n.lane ~/ 2).toSet().length, active.length);
       }
       for (var i = 0; i < analysis.notes.length; i++) {
         final a = analysis.notes[i];
@@ -104,7 +105,29 @@ void main() {
     ]);
     expect(analysis.notes.length, 15);
     for (final note in analysis.notes.skip(1)) {
-      expect(note.lane, isNot(analysis.notes.first.lane));
+      expect(note.lane ~/ 2, isNot(analysis.notes.first.lane ~/ 2));
+    }
+  });
+
+  test('either held thumb leaves only the opposite half for other notes', () {
+    for (final heldLane in [0, 1, 2, 3]) {
+      final analysis = chart([
+        AnalyzedNote(0, heldLane, duration: 3),
+        for (var i = 1; i <= 16; i++) AnalyzedNote(i * 0.15, heldLane),
+        AnalyzedNote(3.05, heldLane), // Still within the release margin.
+        AnalyzedNote(3.3, heldLane),
+      ]);
+      expect(analysis.notes.length, 19);
+      final held = analysis.notes.first;
+      expect(held.lane, heldLane);
+      final duringHold = analysis.notes.skip(1).where((n) => n.time < 3.1);
+      expect(duringHold.map((n) => n.lane ~/ 2).toSet(), {1 - heldLane ~/ 2});
+      expect(duringHold.map((n) => n.lane).toSet().length, 2);
+      expect(analysis.notes.last.lane ~/ 2, heldLane ~/ 2);
+      expect(
+        SongAnalysis.fromJson(analysis.toJson()).toJson(),
+        analysis.toJson(),
+      );
     }
   });
 

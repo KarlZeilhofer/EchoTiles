@@ -19,8 +19,10 @@ Re-analysis is available through the same button. Analysis can be cancelled.
 - Streaming 22.05 kHz mono analysis, 1024-sample Hann FFT, positive log spectral
   flux, adaptive local threshold and peak picking. No whole-song PCM buffer.
 - Tiles follow actual detected onsets. Spectral brightness suggests a lane,
-  with all four lanes used over the song. A two-thumb planner reserves held
-  lanes and a 100 ms release margin. At most two tiles require a thumb at any
+  with all four lanes used over the song. Since 1.3.1, the left thumb owns lanes
+  0/1 and the right thumb owns lanes 2/3. A hold reserves its entire half plus
+  a 100 ms release margin, so no chart requires crossing thumbs or holding
+  one lane while tapping its neighbor with the same thumb. At most two tiles require a thumb at any
   instant, including holds plus taps. Extra accents are omitted while both
   thumbs are occupied; measured vocal/fade durations are preserved rather than
   repeatedly shortened into ordinary taps. Runtime input also limits holds to two.
@@ -43,6 +45,12 @@ Re-analysis is available through the same button. Analysis can be cancelled.
   charts remain playable and receive the two-thumb planning automatically.
   Hold until the tail reaches the line for the full bonus. Original forgiving
   release, movement and touch-cancellation behavior is retained.
+- Version 1.3.1 restores the original live hold rewards: 220 points per held
+  second, a combo increment at each 10% progress step, and 150 points plus two
+  combo increments at completion. Fractional points carry between frames to
+  avoid refresh-rate-dependent scoring. Pause and early release stop earning
+  hold points; holding longer visibly increases the score before completion.
+  Hand assignment also applies to saved charts without re-analysis.
 - The START tile is the first real analyzed note. Its tap is scored immediately
   and is never discarded while audio prepares. Zero-time first notes and a
   first held note are covered by device tests without a second START tap.
@@ -89,7 +97,8 @@ The native tests check synthetic beat alignment, tempo, silence, edge notes,
 progressive density, measured sustain lengths, pitch changes and noise rejection.
 Device tests decode WAV/MP3, complete both a tap track and a hold track, verify
 pause while holding, tap on still-visible tiles after the former timing window,
-and verify that early slider release allows the song to finish.
+and verify live hold rewards, frozen scoring during pause/after release, exact
+completion rewards, and that early slider release allows the song to finish.
 
 Release signing uses `android/key.properties` when supplied; otherwise this
 experimental fork uses the local Android debug key. Never replace the original

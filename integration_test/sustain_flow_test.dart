@@ -98,6 +98,9 @@ void main() {
       size.width * (lane + 0.5) / 4,
       size.height * RhythmTimeline.targetLineFactor,
     );
+    int score() => int.parse(
+      tester.widget<Text>(find.byKey(const ValueKey('game-score'))).data!,
+    );
     Future<void> openGame() async {
       await tester.pumpWidget(
         MaterialApp(
@@ -144,9 +147,20 @@ void main() {
           pointer: pointer++,
         );
         await tester.pump();
+        final attackScore = score();
+        await waitForPosition(note.time + 0.3);
+        expect(score(), greaterThan(attackScore + 20));
         if (!pauseTested) {
           await tester.tap(find.byIcon(Icons.pause_rounded));
           await tester.pumpAndSettle();
+          final pausedScore = score();
+          await Future<void>.delayed(const Duration(milliseconds: 350));
+          await tester.pump();
+          expect(
+            score(),
+            pausedScore,
+            reason: 'Pause must not earn hold points',
+          );
           await tester.tap(find.text('RESUME'));
           while (find.text('PAUSED').evaluate().isNotEmpty) {
             await tester.pump();
@@ -154,7 +168,12 @@ void main() {
           }
           pauseTested = true;
         }
-        await waitForPosition(note.endTime - 0.03);
+        final resumeScore = score();
+        await waitForPosition(note.time + 0.8);
+        expect(score(), greaterThan(resumeScore + 30));
+        final middleScore = score();
+        await waitForPosition(note.endTime + 0.08);
+        expect(score(), greaterThanOrEqualTo(middleScore + 150));
         await gesture.up();
       }
       await tester.pump();
@@ -180,6 +199,16 @@ void main() {
       await tester.tapAt(point(note.lane));
       await tester.pump();
       expect(find.textContaining('OUT OF RHYTHM'), findsNothing);
+      if (note.isLong) {
+        await waitForPosition(note.time + 0.2);
+        final releasedScore = score();
+        await waitForPosition(note.time + 0.7);
+        expect(
+          score(),
+          releasedScore,
+          reason: 'Released slider earns no more points',
+        );
+      }
     }
     completion.reset();
     while (find.textContaining('SONG COMPLETED').evaluate().isEmpty) {

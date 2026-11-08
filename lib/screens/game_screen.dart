@@ -187,10 +187,27 @@ class _GameScreenState extends State<GameScreen>
         tile.length = max(1.0, (tile.y - tile.endY) / _tileHeightFactor);
       }
       if (tile.isHolding) {
+        final heldUntil = time.clamp(note.time, note.endTime);
+        final heldSeconds = max(0.0, heldUntil - tile.holdScoredUntil);
+        tile.holdScoredUntil = heldUntil;
+        // Original reward: 220 points/second while held, ten combo steps,
+        // then a 150-point completion bonus. Keep fractional points across
+        // frames so the reward doesn't depend on the display refresh rate.
+        final points = tile.holdScoreRemainder + heldSeconds * 220;
+        final earned = (points + 1e-9).floor();
+        _score += earned;
+        tile.holdScoreRemainder = points - earned;
+        final previousStep = (tile.holdProgress * 10).floor();
         tile.holdProgress = ((time - note.time) / note.duration).clamp(
           0.0,
           1.0,
         );
+        final steps = (tile.holdProgress * 10).floor() - previousStep;
+        if (steps > 0) {
+          _combo += steps;
+          _maxCombo = max(_maxCombo, _combo);
+          Haptics.light();
+        }
         if (time >= note.endTime) _finishHold(tile);
       }
       if (TileHitTest.isMissed(tile)) {
@@ -208,7 +225,7 @@ class _GameScreenState extends State<GameScreen>
       _triggerVictory();
       return;
     }
-    // Tiles repaint at vsync; score/progress/countdown widgets update at 10 Hz.
+    // Tiles repaint at vsync; score/progress widgets update at 10 Hz.
     _frames.value++;
     final hudTick = (time * 10).floor();
     if (hudTick != _lastHudTick) {
@@ -331,7 +348,10 @@ class _GameScreenState extends State<GameScreen>
         _combo * 2;
     if (tile.isLong) {
       tile.isHolding = true;
-      tile.holdProgress = 0;
+      final note = widget.analysis.notes[tile.noteIndex];
+      tile.holdScoredUntil = _time.clamp(note.time, note.endTime);
+      tile.holdProgress = ((tile.holdScoredUntil - note.time) / note.duration)
+          .clamp(0.0, 1.0);
       _activeHolds[event.pointer] = tile.id;
     } else {
       tile.isHit = true;
@@ -353,8 +373,9 @@ class _GameScreenState extends State<GameScreen>
     tile.isHit = true;
     tile.holdProgress = 1;
     _activeHolds.removeWhere((_, id) => id == tile.id);
-    _score +=
-        150 + (widget.analysis.notes[tile.noteIndex].duration * 100).round();
+    _score += 150;
+    _combo += 2;
+    _maxCombo = max(_maxCombo, _combo);
     Haptics.medium();
   }
 
@@ -520,6 +541,7 @@ class _GameScreenState extends State<GameScreen>
                       children: [
                         Text(
                           '$_score',
+                          key: const ValueKey('game-score'),
                           style: TextStyle(
                             fontFamily: 'Fredoka',
                             fontSize: 30,

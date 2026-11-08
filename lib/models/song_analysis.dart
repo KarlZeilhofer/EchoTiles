@@ -83,13 +83,14 @@ class SongAnalysis {
     );
   }
 
-  // Reserve at most two thumbs, including a short release/transition margin.
+  // Each thumb owns its half: lanes 0/1 for left, 2/3 for right. Reserve the
+  // entire hand during a hold, including a short release/transition margin.
   // Preserve full musical hold lengths and omit extra accents while both
   // thumbs are occupied instead of chopping every long vocal into short taps.
   static List<AnalyzedNote> _distributeLanes(List<AnalyzedNote> notes) {
     final available = <int>{};
     final result = <AnalyzedNote>[];
-    final busyUntil = List<double>.filled(4, 0);
+    final busyUntil = List<double>.filled(2, 0);
     var previous = -1;
     for (final note in notes) {
       final occupied = busyUntil.where((end) => end > note.time + 1e-6).length;
@@ -97,7 +98,7 @@ class SongAnalysis {
       if (available.isEmpty) available.addAll([0, 1, 2, 3]);
       final free = [
         for (var lane = 0; lane < 4; lane++)
-          if (busyUntil[lane] <= note.time + 1e-6) lane,
+          if (busyUntil[lane ~/ 2] <= note.time + 1e-6) lane,
       ];
       var candidates = free
           .where((lane) => available.contains(lane) && lane != previous)
@@ -111,7 +112,7 @@ class SongAnalysis {
           (previous < 0 ? 0 : (lane - previous).abs());
       final lane = candidates.reduce((a, b) => cost(a) <= cost(b) ? a : b);
       result.add(AnalyzedNote(note.time, lane, duration: note.duration));
-      busyUntil[lane] =
+      busyUntil[lane ~/ 2] =
           (note.isLong ? note.endTime : note.time) + thumbReleaseGap;
       available.remove(lane);
       previous = lane;

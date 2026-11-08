@@ -76,9 +76,13 @@ void main() {
       await tester.pump();
       expect(find.textContaining('OUT OF RHYTHM'), findsNothing);
       final pos = await AudioService.instance.getCurrentPosition();
-      if (pos != null && pos.inMilliseconds >= 1300) break;
+      if (pos != null && pos.inMilliseconds >= 1370) break;
       await Future<void>.delayed(const Duration(milliseconds: 20));
     }
+    expect(
+      tester.widget<Text>(find.byKey(const ValueKey('game-score'))).data,
+      '516', // 102 attack + 1.2 seconds * 220 + 150 completion.
+    );
     await hold.up();
     await finish();
 
@@ -96,6 +100,8 @@ void main() {
       ].map((n) => n.toJson()).toList(),
     });
     expect(twoThumbs.notes.map((n) => n.time), [0.4, 0.6, 2.4]);
+    expect(twoThumbs.notes[0].lane ~/ 2, 0);
+    expect(twoThumbs.notes[1].lane ~/ 2, 1);
     await open(twoThumbs);
     final left = await tester.startGesture(
       point(twoThumbs.notes[0].lane),

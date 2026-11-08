@@ -73,6 +73,8 @@ class GameTile {
   bool isHit;
   bool isHolding;
   double holdProgress;
+  double holdScoredUntil = 0;
+  double holdScoreRemainder = 0;
   bool isMissed;
   final int noteIndex;
 
