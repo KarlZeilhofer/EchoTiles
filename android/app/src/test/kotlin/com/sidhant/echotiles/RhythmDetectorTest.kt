@@ -107,4 +107,68 @@ class RhythmDetectorTest {
         assertTrue(notes.all { (it["time"] as Double) + (it["duration"] as Double) <= 3.001 })
     }
 
+    @Test fun veryQuietSustainedNotesRemainSliders() {
+        val detector = RhythmDetector()
+        repeat(RhythmDetector.RATE * 4) { i ->
+            val t = i.toDouble() / RhythmDetector.RATE
+            detector.add(if (t in 0.5..2.5) 0.0003 * sin(2 * PI * 440 * t) else 0.0)
+        }
+        @Suppress("UNCHECKED_CAST")
+        val notes = detector.finish(4.0)["notes"] as List<Map<String, Any>>
+        val note = notes.minBy { abs((it["time"] as Double) - 0.5) }
+        assertEquals(2.0, note["duration"] as Double, 0.12)
+        assertTrue((note["time"] as Double) + (note["duration"] as Double) < 2.65)
+    }
+
+    @Test fun fadingTonesFollowTheAudibleTailAndStopAtSilence() {
+        val detector = RhythmDetector()
+        repeat(RhythmDetector.RATE * 4) { i ->
+            val t = i.toDouble() / RhythmDetector.RATE
+            val phase = t - 0.5
+            detector.add(if (phase >= 0 && phase < 2.5)
+                0.3 * exp(-2 * phase) * sin(2 * PI * 440 * phase) else 0.0)
+        }
+        @Suppress("UNCHECKED_CAST")
+        val notes = detector.finish(4.0)["notes"] as List<Map<String, Any>>
+        val note = notes.minBy { abs((it["time"] as Double) - 0.5) }
+        assertTrue("Fade cut too soon: $note", note["duration"] as Double > 2.25)
+        assertTrue((note["time"] as Double) + (note["duration"] as Double) < 3.12)
+    }
+
+    @Test fun longVocalLikeHarmonicsSurviveVibratoAndChangingDominantHarmonics() {
+        val detector = RhythmDetector()
+        var angle = 0.0
+        repeat(RhythmDetector.RATE * 4) { i ->
+            val t = i.toDouble() / RhythmDetector.RATE
+            val phase = t - 0.5
+            angle += 2 * PI * (180 + 5 * sin(2 * PI * 5 * t)) / RhythmDetector.RATE
+            val blend = (phase / 2.5).coerceIn(0.0, 1.0)
+            val voice = (1 - blend) * sin(angle) + 0.6 * sin(2 * angle) +
+                blend * sin(3 * angle) + 0.5 * sin(4 * angle)
+            detector.add(if (phase >= 0 && phase < 2.5) 0.01 * voice else 0.0)
+        }
+        @Suppress("UNCHECKED_CAST")
+        val notes = detector.finish(4.0)["notes"] as List<Map<String, Any>>
+        val note = notes.minBy { abs((it["time"] as Double) - 0.5) }
+        assertTrue("Vocal fragmented into taps: $notes", note["duration"] as Double > 2.2)
+        assertTrue((note["time"] as Double) + (note["duration"] as Double) < 3.15)
+        assertTrue("Vibrato created phantom taps: $notes", notes.none { (it["time"] as Double) in 0.7..2.9 })
+    }
+
+    @Test fun unpitchedDecayCanBeHeldButNotTheFollowingSilence() {
+        val detector = RhythmDetector()
+        val random = java.util.Random(23)
+        repeat(RhythmDetector.RATE * 4) { i ->
+            val t = i.toDouble() / RhythmDetector.RATE
+            val phase = t - 0.5
+            detector.add(if (phase >= 0 && phase < 2.5)
+                0.2 * exp(-1.2 * phase) * (random.nextDouble() - 0.5) else 0.0)
+        }
+        @Suppress("UNCHECKED_CAST")
+        val notes = detector.finish(4.0)["notes"] as List<Map<String, Any>>
+        val note = notes.minBy { abs((it["time"] as Double) - 0.5) }
+        assertTrue("Decay fragmented into taps: $note", note["duration"] as Double > 2.2)
+        assertTrue((note["time"] as Double) + (note["duration"] as Double) < 3.15)
+    }
+
 }

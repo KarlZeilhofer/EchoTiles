@@ -545,19 +545,19 @@ abstract class AppLocalizations {
   /// No description provided for @startRhythm.
   ///
   /// In en, this message translates to:
-  /// **'Tap START. Tiles arrive with the music after a short lead-in.'**
+  /// **'Tap START to play the first tile and begin the music.'**
   String get startRhythm;
 
   /// No description provided for @rhythmDifficulty.
   ///
   /// In en, this message translates to:
-  /// **'Later in the song, tiles scroll faster and more detected notes are included.'**
+  /// **'Later tiles move faster. Charts always require at most two thumbs.'**
   String get rhythmDifficulty;
 
   /// No description provided for @analyzeHoldsHint.
   ///
   /// In en, this message translates to:
-  /// **'Analyze again to detect long notes.'**
+  /// **'Analyze again for vocals and fading sounds.'**
   String get analyzeHoldsHint;
 }
 

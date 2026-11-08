@@ -252,13 +252,13 @@ class AppLocalizationsIt extends AppLocalizations {
 
   @override
   String get startRhythm =>
-      'Tocca START. Le tessere seguono la musica dopo una breve introduzione.';
+      'Tocca START per suonare la prima tessera e avviare la musica.';
 
   @override
   String get rhythmDifficulty =>
-      'Più avanti nel brano, le tessere scorrono più velocemente e includono più note rilevate.';
+      'Le tessere accelerano durante il brano. Bastano sempre al massimo due pollici.';
 
   @override
   String get analyzeHoldsHint =>
-      'Analizza di nuovo per rilevare le note lunghe.';
+      'Analizza di nuovo per voci e suoni in dissolvenza.';
 }

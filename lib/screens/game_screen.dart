@@ -91,7 +91,7 @@ class _GameScreenState extends State<GameScreen>
   void _initLevel() {
     _generation++;
     if (_ticker.isActive) _ticker.stop();
-    _clock.reset(-2);
+    _clock.reset(0);
     _lastHudTick = -1;
     _audioStarted = false;
     _audioStarting = false;
@@ -99,17 +99,29 @@ class _GameScreenState extends State<GameScreen>
     _score = 0;
     _combo = 0;
     _maxCombo = 0;
-    _nextTileIndex = 0;
+    _nextTileIndex = 1;
     _failedLane = -1;
     _songProgress = 0;
     _tiles.clear();
     _feedbacks.clear();
     _activeHolds.clear();
+    final first = widget.analysis.notes.first;
+    final endY = RhythmTimeline.position(
+      first.endTime,
+      0,
+      widget.analysis.duration,
+    );
     _tiles.add(
       GameTile(
         id: 0,
-        lane: widget.analysis.notes.first.lane,
+        lane: first.lane,
         y: _targetLineFactor,
+        noteIndex: 0,
+        isLong: first.isLong,
+        endY: endY,
+        length: first.isLong
+            ? max(1.0, (_targetLineFactor - endY) / _tileHeightFactor)
+            : 1,
       ),
     );
     AudioService.instance.stopSong();
@@ -143,7 +155,6 @@ class _GameScreenState extends State<GameScreen>
 
   void _onTick(Duration elapsed) {
     if (_status != GameStatus.playing) return;
-    if (!_audioStarted && _time >= 0) _beginAudio();
     final time = _time;
     final analysis = widget.analysis;
     _songProgress = (time / analysis.duration).clamp(0.0, 1.0);
@@ -153,7 +164,7 @@ class _GameScreenState extends State<GameScreen>
       if (y < -0.25) break;
       _tiles.add(
         GameTile(
-          id: _nextTileIndex + 1,
+          id: _nextTileIndex,
           lane: note.lane,
           y: y,
           noteIndex: _nextTileIndex,
@@ -164,7 +175,9 @@ class _GameScreenState extends State<GameScreen>
     }
     for (final tile in _tiles) {
       final note = analysis.notes[tile.noteIndex];
-      tile.y = RhythmTimeline.position(note.time, time, analysis.duration);
+      tile.y = tile.id == 0 && tile.isHolding && time < note.time
+          ? _targetLineFactor
+          : RhythmTimeline.position(note.time, time, analysis.duration);
       tile.endY = RhythmTimeline.position(
         note.endTime,
         time,
@@ -205,9 +218,9 @@ class _GameScreenState extends State<GameScreen>
   }
 
   void _startGame() {
-    _tiles.clear();
     _status = GameStatus.playing;
-    _clock.resume();
+    _clock.reset(0);
+    _beginAudio();
     _ticker.start();
   }
 
@@ -274,6 +287,10 @@ class _GameScreenState extends State<GameScreen>
   void _onPointerDown(PointerDownEvent event, Size screenSize) {
     if (_status != GameStatus.playing && _status != GameStatus.ready) return;
     if (event.localPosition.dy < 75) return;
+    if (_status == GameStatus.playing &&
+        _activeHolds.length >= SongAnalysis.maxSimultaneousTiles) {
+      return;
+    }
     final laneWidth = screenSize.width / 4;
     final tapX = event.localPosition.dx;
     final tapY = event.localPosition.dy;
@@ -285,19 +302,22 @@ class _GameScreenState extends State<GameScreen>
       tapY / screenSize.height,
       _targetLineFactor,
     );
-    if (_status == GameStatus.ready) {
-      if (tile == null || tile.id != 0) {
+    final isStartTap = _status == GameStatus.ready;
+    if (tile == null) {
+      // During source preparation keep valid visible taps, but don't punish a
+      // second touch while the first cleared tile is waiting for audio startup.
+      if (_audioStarting && !isStartTap) return;
+      _triggerGameOver(lane, Offset(tapX, tapY));
+      return;
+    }
+    if (isStartTap) {
+      if (tile.id != 0) {
         _triggerGameOver(lane, Offset(tapX, tapY));
         return;
       }
       _startGame();
-      setState(() {});
-      return;
-    }
-    if (_time < 0 || _audioStarting) return;
-    if (tile == null) {
-      _triggerGameOver(lane, Offset(tapX, tapY));
-      return;
+      // Continue through normal hit/hold handling: START is the first real
+      // note, not a disposable duplicate that needs another tap later.
     }
     final quality = TileHitTest.quality(tile, _targetLineFactor);
     _combo++;
@@ -450,24 +470,6 @@ class _GameScreenState extends State<GameScreen>
                   AppLocalizations.of(context).startRhythm,
                   textAlign: TextAlign.center,
                   style: TextStyle(color: theme.textPrimary, fontSize: 16),
-                ),
-              ),
-            ),
-          if (_status == GameStatus.playing && !_audioStarted)
-            Positioned(
-              left: 0,
-              right: 0,
-              top: 150,
-              child: IgnorePointer(
-                child: Center(
-                  child: Text(
-                    '${(-_time).ceil().clamp(1, 2)}',
-                    style: TextStyle(
-                      color: theme.playBg,
-                      fontSize: 48,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
                 ),
               ),
             ),
@@ -1009,7 +1011,11 @@ class _GameTilesPainter extends CustomPainter {
           canvas,
           Offset(
             tileX + (laneWidth - tp.width) / 2,
-            tileY + (tileHeight - tp.height) / 2,
+            (tile.isLong
+                ? tile.y * size.height -
+                      size.height * tileHeightFactor / 2 -
+                      tp.height / 2
+                : tileY + (tileHeight - tp.height) / 2),
           ),
         );
       }

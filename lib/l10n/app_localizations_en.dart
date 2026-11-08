@@ -250,12 +250,12 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get startRhythm =>
-      'Tap START. Tiles arrive with the music after a short lead-in.';
+      'Tap START to play the first tile and begin the music.';
 
   @override
   String get rhythmDifficulty =>
-      'Later in the song, tiles scroll faster and more detected notes are included.';
+      'Later tiles move faster. Charts always require at most two thumbs.';
 
   @override
-  String get analyzeHoldsHint => 'Analyze again to detect long notes.';
+  String get analyzeHoldsHint => 'Analyze again for vocals and fading sounds.';
 }

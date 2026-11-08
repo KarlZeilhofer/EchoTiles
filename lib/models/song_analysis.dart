@@ -20,7 +20,9 @@ class AnalyzedNote {
 }
 
 class SongAnalysis {
-  static const version = 2;
+  static const version = 3;
+  static const maxSimultaneousTiles = 2;
+  static const thumbReleaseGap = 0.10;
   final double duration;
   final double bpm;
   final int analysisVersion;
@@ -40,7 +42,9 @@ class SongAnalysis {
   };
 
   factory SongAnalysis.fromJson(Map<String, dynamic> json) {
-    if (json['version'] != 1 && json['version'] != version) {
+    if (json['version'] != 1 &&
+        json['version'] != 2 &&
+        json['version'] != version) {
       throw const FormatException('Old analysis');
     }
     final duration = (json['duration'] as num).toDouble();
@@ -79,41 +83,22 @@ class SongAnalysis {
     );
   }
 
-  // Balance each group of four notes while preferring the lane suggested by
-  // spectral brightness. Apply at the shared decoding boundary so existing
-  // saved charts benefit too, without repeating the expensive audio analysis.
-  // Already-balanced charts retain their layout when loaded again.
+  // Reserve at most two thumbs, including a short release/transition margin.
+  // Preserve full musical hold lengths and omit extra accents while both
+  // thumbs are occupied instead of chopping every long vocal into short taps.
   static List<AnalyzedNote> _distributeLanes(List<AnalyzedNote> notes) {
     final available = <int>{};
     final result = <AnalyzedNote>[];
     final busyUntil = List<double>.filled(4, 0);
-    final lastNote = List<int>.filled(4, -1);
     var previous = -1;
     for (final note in notes) {
+      final occupied = busyUntil.where((end) => end > note.time + 1e-6).length;
+      if (occupied >= maxSimultaneousTiles) continue;
       if (available.isEmpty) available.addAll([0, 1, 2, 3]);
-      var free = [
+      final free = [
         for (var lane = 0; lane < 4; lane++)
           if (busyUntil[lane] <= note.time + 1e-6) lane,
       ];
-      if (free.isEmpty) {
-        // Preserve every onset if all fingers are occupied: release the hold
-        // ending soonest before this new note, rather than overlap one lane.
-        final lane = [
-          0,
-          1,
-          2,
-          3,
-        ].reduce((a, b) => busyUntil[a] <= busyUntil[b] ? a : b);
-        final index = lastNote[lane];
-        final old = result[index];
-        final length = (note.time - old.time - 0.08).clamp(0.0, old.duration);
-        result[index] = AnalyzedNote(
-          old.time,
-          old.lane,
-          duration: length >= AnalyzedNote.minimumHoldDuration ? length : 0,
-        );
-        free = [lane];
-      }
       var candidates = free
           .where((lane) => available.contains(lane) && lane != previous)
           .toList();
@@ -126,8 +111,8 @@ class SongAnalysis {
           (previous < 0 ? 0 : (lane - previous).abs());
       final lane = candidates.reduce((a, b) => cost(a) <= cost(b) ? a : b);
       result.add(AnalyzedNote(note.time, lane, duration: note.duration));
-      lastNote[lane] = result.length - 1;
-      busyUntil[lane] = note.isLong ? note.endTime + 0.08 : note.time;
+      busyUntil[lane] =
+          (note.isLong ? note.endTime : note.time) + thumbReleaseGap;
       available.remove(lane);
       previous = lane;
     }

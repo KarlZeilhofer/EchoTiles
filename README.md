@@ -7,7 +7,8 @@ Android rhythm-analysis fork of [Sidhant’s EchoTiles](https://github.com/sidha
 Download the APK at **https://alpenchat.at/downloads/**. Install **Echo Tiles Rhythm**
 next to the F-Droid original; it has a separate application ID
 (`at.zeilhofer.echotiles.rhythm`). Add a local song, press **Analyze now**, wait for
-analysis, then press play and tap START. There is a two-second visual lead-in.
+analysis, then press play and tap START. The START tap hits the first real tile
+and starts the music; there is no separate duplicate tile or countdown.
 Re-analysis is available through the same button. Analysis can be cancelled.
 
 ## What changed
@@ -17,30 +18,34 @@ Re-analysis is available through the same button. Analysis can be cancelled.
   formats use the system decoder; unsupported/corrupt/silent files show errors.
 - Streaming 22.05 kHz mono analysis, 1024-sample Hann FFT, positive log spectral
   flux, adaptive local threshold and peak picking. No whole-song PCM buffer.
-- Tiles follow actual detected onsets. Spectral brightness suggests a lane, then
-  a deterministic allocator uses all four lanes in each group of four notes and
-  avoids consecutive notes in the same lane. Holds reserve their lanes; other
-  onsets use free lanes, with old holds shortened only if all four are occupied.
+- Tiles follow actual detected onsets. Spectral brightness suggests a lane,
+  with all four lanes used over the song. A two-thumb planner reserves held
+  lanes and a 100 ms release margin. At most two tiles require a thumb at any
+  instant, including holds plus taps. Extra accents are omitted while both
+  thumbs are occupied; measured vocal/fade durations are preserved rather than
+  repeatedly shortened into ordinary taps. Runtime input also limits holds to two.
   Version 1.1.1 also applies the lane balancing to
   existing saved charts automatically; **no re-analysis is required**.
-  Musical onset times, density and progressive scroll speed are preserved;
+  Retained notes keep their musical onset times and progressive scroll speed;
   this is onset detection, **not polyphonic pitch transcription**. Tempo is an
   approximate estimate and does not quantize or replace the detected timestamps.
 - Progressive difficulty: onset spacing decreases from 380 ms near the beginning
   to 140 ms at the end. Visual scrolling rises smoothly from 0.5 to 1.25 screen
   heights/second (2.5×). Notes still arrive at the judgment line on their detected
   audio timestamps; the audio itself is not sped up. Sparse passages stay sparse.
-- Version 1.2.0 detects dominant sustained tones using narrow-band energy,
-  stable spectral peaks, relative RMS decay and pitch changes. Measured sustains of at
-  least **1 second** become holds (since 1.2.1); shorter notes stay tap tiles,
-  including existing saved charts.
-  This is a conservative estimate in mixed music, not polyphonic transcription.
-  Re-run **Analyze now** once to add durations to an older chart (v1 charts
-  remain playable). Slider head and tail use the detected onset and offset;
-  their spatial length scales with the current scroll speed. Hold one finger
-  until the tail reaches the line for the full bonus. As in the original,
-  early release, moving out of a lane or touch cancellation clears the tile
-  without ending the run.
+- Version 1.3.0 follows quiet vocals and fading sounds using compact log-band
+  spectral profiles, adaptive timbre tracking and relative decay thresholds.
+  Changing dominant harmonics/vibrato no longer immediately cuts a held vocal.
+  Steady broadband noise and actual silence do not become sliders. Measured
+  sustains of at least **1 second** become holds; shorter notes remain taps.
+  This is a heuristic for mixed music, not polyphonic source separation.
+  Re-run **Analyze now** once for the new detector (v3 charts). Existing v1/v2
+  charts remain playable and receive the two-thumb planning automatically.
+  Hold until the tail reaches the line for the full bonus. Original forgiving
+  release, movement and touch-cancellation behavior is retained.
+- The START tile is the first real analyzed note. Its tap is scored immediately
+  and is never discarded while audio prepares. Zero-time first notes and a
+  first held note are covered by device tests without a second START tap.
 - **Version 1.2.1 restores the original F-Droid 1.0.0 spatial hit test** from
   [upstream commit 6829d30](https://github.com/sidhant947/EchoTiles/blob/6829d30c6975e9ac213cb62f7e7e02c63b4dd1bb/lib/screens/game_screen.dart):
   bottom-anchored rectangles, 0.08 screen-height direct-tap padding, 0.18
@@ -58,7 +63,8 @@ Re-analysis is available through the same button. Analysis can be cancelled.
   Tiles repaint at vsync without rebuilding the widget tree. The opaque HUD
   updates at 10 Hz and no longer blurs the moving background.
 - Pause/background transitions freeze the game clock. Muting still advances
-  playback. Device tests play an entire synthetic click track to completion.
+  playback. Device tests complete tap/hold tracks and exercise overlapping two-thumb
+  holds plus immediate startup at audio time zero.
 
 ## Build and verify
 

@@ -109,7 +109,7 @@ void main() {
     );
     await tester.pump();
     final playbackDeadline = Stopwatch()..start();
-    for (final note in clicks.notes) {
+    for (final note in clicks.notes.skip(1)) {
       while (true) {
         await tester.pump();
         expect(find.textContaining('OUT OF RHYTHM'), findsNothing);
@@ -194,7 +194,7 @@ void main() {
       ),
     );
     await tester.pump();
-    expect(find.text('2'), findsOneWidget);
+    expect(find.text('102'), findsOneWidget);
     // Pause during the lead-in; real audio time must remain frozen.
     await tester.tap(find.byIcon(Icons.pause_rounded));
     await tester.pumpAndSettle();

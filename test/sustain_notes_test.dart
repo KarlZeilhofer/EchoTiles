@@ -37,26 +37,36 @@ void main() {
     expect(analysis.notes.single.duration, 0);
   });
 
-  test('overlapping holds occupy separate lanes and remain playable', () {
-    final analysis = chart([
-      for (var i = 0; i < 8; i++) AnalyzedNote(i * 0.3, 0, duration: 2),
-    ]);
-    expect(analysis.notes.map((n) => n.time), [
-      for (var i = 0; i < 8; i++) i * 0.3,
-    ]);
-    for (var i = 0; i < analysis.notes.length; i++) {
-      final a = analysis.notes[i];
-      for (final b
-          in analysis.notes.skip(i + 1).where((n) => n.lane == a.lane)) {
-        if (a.isLong) expect(a.endTime, lessThanOrEqualTo(b.time + 1e-6));
+  test(
+    'overlapping holds preserve their length and never need a third thumb',
+    () {
+      final analysis = chart([
+        for (var i = 0; i < 16; i++) AnalyzedNote(i * 0.3, 0, duration: 2),
+      ]);
+      expect(analysis.notes.length, lessThan(16));
+      expect(analysis.notes.every((n) => n.duration == 2), isTrue);
+      for (final note in analysis.notes) {
+        final active = analysis.notes.where(
+          (n) =>
+              n.time <= note.time + 1e-6 &&
+              n.endTime + SongAnalysis.thumbReleaseGap > note.time + 1e-6,
+        );
+        expect(active.length, lessThanOrEqualTo(2));
       }
-    }
-    expect(analysis.notes.map((n) => n.lane).toSet(), {0, 1, 2, 3});
-    expect(
-      SongAnalysis.fromJson(analysis.toJson()).toJson(),
-      analysis.toJson(),
-    );
-  });
+      for (var i = 0; i < analysis.notes.length; i++) {
+        final a = analysis.notes[i];
+        for (final b
+            in analysis.notes.skip(i + 1).where((n) => n.lane == a.lane)) {
+          if (a.isLong) expect(a.endTime, lessThanOrEqualTo(b.time + 1e-6));
+        }
+      }
+      expect(analysis.notes.map((n) => n.lane).toSet(), {0, 1, 2, 3});
+      expect(
+        SongAnalysis.fromJson(analysis.toJson()).toJson(),
+        analysis.toJson(),
+      );
+    },
+  );
 
   test(
     'slider length scales with musical duration and tail arrives on time',
@@ -70,6 +80,33 @@ void main() {
       }
     },
   );
+
+  test(
+    'two sustained vocals suppress extra accents instead of deleting sliders',
+    () {
+      final analysis = chart(const [
+        AnalyzedNote(0, 0, duration: 2),
+        AnalyzedNote(0.2, 1, duration: 2),
+        AnalyzedNote(0.4, 2),
+        AnalyzedNote(0.8, 3, duration: 1.5),
+        AnalyzedNote(2.2, 2),
+        AnalyzedNote(2.4, 3),
+      ]);
+      expect(analysis.notes.map((n) => n.time), [0, 0.2, 2.2, 2.4]);
+      expect(analysis.notes.take(2).map((n) => n.duration), [2, 2]);
+    },
+  );
+
+  test('one held vocal leaves the second thumb free for short notes', () {
+    final analysis = chart([
+      const AnalyzedNote(0, 0, duration: 3),
+      for (var i = 1; i < 15; i++) AnalyzedNote(i * 0.15, i % 4),
+    ]);
+    expect(analysis.notes.length, 15);
+    for (final note in analysis.notes.skip(1)) {
+      expect(note.lane, isNot(analysis.notes.first.lane));
+    }
+  });
 
   test('slider minimum is one second, also for saved v2 analyses', () {
     final analysis = chart(const [

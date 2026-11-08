@@ -44,15 +44,19 @@ void main() {
     bytes.setUint16(34, 16, Endian.little);
     ascii(36, 'data');
     bytes.setUint32(40, samples * 2, Endian.little);
-    const tones = [(0.5, 0.6, 440.0), (1.6, 1.3, 660.0), (3.3, 0.06, 880.0)];
+    const tones = [
+      (0.5, 0.6, 440.0, 0.003),
+      (1.6, 1.3, 660.0, 0.001),
+      (3.3, 0.06, 880.0, 0.6),
+    ];
     for (var i = 0; i < samples; i++) {
       final time = i / rate;
       var value = 0.0;
-      for (final (start, duration, frequency) in tones) {
+      for (final (start, duration, frequency, gain) in tones) {
         final phase = time - start;
         if (phase >= 0 && phase < duration) {
           value +=
-              0.6 *
+              gain *
               min(1.0, phase / 0.01) *
               min(1.0, (duration - phase) / 0.02) *
               sin(2 * pi * frequency * phase);
@@ -76,6 +80,14 @@ void main() {
     expect(holds.length, 1);
     expect(holds[0].duration, closeTo(1.3, 0.1));
     expect(analysis.notes.first.isLong, isFalse);
+    expect(
+      analysis.notes.length,
+      3,
+      reason: 'Quiet sustained notes must not acquire phantom taps',
+    );
+    debugPrint(
+      'Quiet chart: ${analysis.notes.map((n) => n.toJson()).toList()}',
+    );
     expect(analysis.notes.any((n) => !n.isLong), isTrue);
     debugPrint(
       'Detected hold lengths: ${holds.map((n) => n.duration).toList()}',
@@ -122,7 +134,7 @@ void main() {
     await openGame();
     var pointer = 100;
     var pauseTested = false;
-    for (final note in analysis.notes) {
+    for (final note in analysis.notes.skip(1)) {
       await waitForPosition(note.time - 0.02);
       if (!note.isLong) {
         await tester.tapAt(point(note.lane));
@@ -163,7 +175,7 @@ void main() {
     await tester.pumpWidget(const SizedBox.shrink());
     await tester.pump();
     await openGame();
-    for (final note in analysis.notes) {
+    for (final note in analysis.notes.skip(1)) {
       await waitForPosition(note.time);
       await tester.tapAt(point(note.lane));
       await tester.pump();

@@ -10,11 +10,14 @@ class RhythmDetector {
         private const val WINDOW = 1024
         private const val HOP = 441
     }
-    private data class Frame(val time: Double, val flux: Double, val rms: Double, val pitch: Double, val peakBin: Int, val tonality: Double)
+    private data class Frame(val time: Double, val flux: Double, val rms: Double, val pitch: Double, val peakBin: Int, val tonality: Double, val profile: FloatArray)
     private val samples = DoubleArray(WINDOW)
     private val previous = DoubleArray(WINDOW / 2)
     private val window = DoubleArray(WINDOW) { 0.5 - 0.5 * cos(2 * PI * it / (WINDOW - 1)) }
     private val frames = ArrayList<Frame>()
+    private val bands = IntArray(WINDOW / 2) { i ->
+        (ln(max(1.0, i.toDouble() * RATE / WINDOW / 65.0)) / ln(2.0) * 6).toInt().coerceIn(0, 47)
+    }
     private var count = WINDOW / 2 // zero padding lets us detect notes at time zero
     private var total = 0L
     private var sinceFrame = 0
@@ -45,10 +48,20 @@ class RhythmDetector {
         var weight = 0.0
         val power = DoubleArray(WINDOW / 2)
         var totalPower = 0.0
+        val strongest = DoubleArray(12)
+        val bandPower = DoubleArray(48)
         var peakBin = 2
         for (i in 2 until WINDOW / 2) {
             power[i] = re[i] * re[i] + im[i] * im[i]
             totalPower += power[i]
+            bandPower[bands[i]] += power[i]
+            if (power[i] > strongest.last()) {
+                var slot = strongest.lastIndex
+                while (slot > 0 && power[i] > strongest[slot - 1]) {
+                    strongest[slot] = strongest[slot - 1]; slot--
+                }
+                strongest[slot] = power[i]
+            }
             if (power[i] > power[peakBin]) peakBin = i
             val magnitude = ln(1 + 10 * sqrt(power[i]))
             flux += max(0.0, magnitude - previous[i])
@@ -56,10 +69,14 @@ class RhythmDetector {
             weighted += i * magnitude * magnitude
             weight += magnitude * magnitude
         }
-        val tonalPower = (max(2, peakBin - 1)..min(WINDOW / 2 - 1, peakBin + 1)).sumOf { power[it] }
+        val profile = FloatArray(48) { i ->
+            (0.6 * bandPower[i] + (if (i > 0) 0.2 * bandPower[i - 1] else 0.0) +
+                (if (i < 47) 0.2 * bandPower[i + 1] else 0.0)).toFloat()
+        }
+        normalize(profile)
         frames.add(Frame(max(0.0, (total - WINDOW / 2.0) / RATE), flux,
             sqrt(energy / WINDOW), if (weight > 0) weighted / weight * RATE / WINDOW else 0.0,
-            peakBin, if (totalPower > 0) tonalPower / totalPower else 0.0))
+            peakBin, if (totalPower > 0) strongest.sum() / totalPower else 0.0, profile))
     }
 
     fun finish(duration: Double): Map<String, Any> {
@@ -68,7 +85,16 @@ class RhythmDetector {
         val peaks = ArrayList<Frame>()
         for (i in frames.indices) {
             val f = frames[i]
-            if (f.time > duration || f.rms < 0.001 || f.flux < 0.5) continue
+            if (f.time > duration || f.rms < 0.00002 || f.flux < 0.05) continue
+            val before = if (i == 0) 0.0 else (max(0, i - 3) until i).map { frames[it].rms }.average()
+            val after = (min(frames.lastIndex, i + 1)..min(frames.lastIndex, i + 3)).map { frames[it].rms }.average()
+            if (after < 0.000015 || (before > 0 && after < before * 0.4)) continue
+            val attack = max(f.rms, after) > before * 1.10
+            val changedSound = after >= before * 0.6 && similarity(
+                frames[max(0, i - 2)].profile, frames[min(frames.lastIndex, i + 2)].profile) < 0.85
+            // Quantization/vibrato and note releases can create positive FFT
+            // flux without a new audible attack. Don't make phantom tap notes.
+            if (!attack && !changedSound) continue
             val left = max(0, i - 25)
             val right = min(frames.lastIndex, i + 25)
             val mean = (left..right).sumOf { frames[it].flux } / (right - left + 1)
@@ -90,49 +116,65 @@ class RhythmDetector {
             if (selected.isEmpty() || peak.time - selected.last().time >= minimumGap) selected.add(peak)
         }
         var previousToneEnd = 0.0
-        var previousToneBin = -1
         val notes = selected.map { f ->
             val lane = if (pitches.last() - pitches.first() < 20) 1 else
                 (1..3).count { f.pitch > pitches[min(pitches.lastIndex, pitches.size * it / 4)] }
             val index = frames.binarySearchBy(f.time) { it.time }.coerceAtLeast(0)
-            val sustain = if (f.time < previousToneEnd && abs(f.peakBin - previousToneBin) <= max(1, previousToneBin / 16))
-                0.0 to previousToneBin else estimateSustain(index, duration)
-            // An accent during an already-held tone should not start a second
-            // copy of that same sustained note. Other accents remain tap notes.
-            val duplicate = f.time < previousToneEnd && abs(sustain.second - previousToneBin) <= max(1, previousToneBin / 16)
-            val hold = if (duplicate) 0.0 else sustain.first
-            if (hold > 0) { previousToneEnd = f.time + hold; previousToneBin = sustain.second }
+            val duplicate = f.time < previousToneEnd && similarity(
+                frames[max(0, index - 3)].profile,
+                frames[min(frames.lastIndex, index + 3)].profile) >= 0.65
+            val hold = if (duplicate) 0.0 else estimateSustain(index, duration)
+            if (hold > 0) previousToneEnd = f.time + hold
             mapOf("time" to f.time, "lane" to lane, "duration" to hold)
         }
-        return mapOf("version" to 2, "duration" to duration, "bpm" to bpm, "notes" to notes)
+        return mapOf("version" to 3, "duration" to duration, "bpm" to bpm, "notes" to notes)
     }
 
-    /** Conservative dominant-tone sustain: require a stable narrow-band sound,
-     * and stop at silence, a pitch change, or the track end. A quiet gap alone
-     * never turns a short percussion hit into a hold. */
-    private fun estimateSustain(onset: Int, duration: Double): Pair<Double, Int> {
+    /** Track the spectral shape rather than a single loudest FFT bin. This
+     * survives vocal vibrato/formant changes and follows quiet, audible decay.
+     * Actual silence, a new spectral shape, and track end still stop a hold. */
+    private fun estimateSustain(onset: Int, duration: Double): Double {
         val start = frames[onset].time
-        val attackEnd = min(frames.lastIndex, onset + 4)
+        val attackEnd = min(frames.lastIndex, onset + 5)
         val reference = (onset..attackEnd).maxOf { frames[it].rms }
+        val floor = max(0.000015, reference * 0.005)
+        val decayFrame = frames[min(frames.lastIndex, onset + 20)]
+        val fading = decayFrame.time <= duration && decayFrame.rms > floor &&
+            decayFrame.rms < reference * 0.75
         val anchor = (min(onset + 1, attackEnd)..attackEnd).firstOrNull {
-            frames[it].tonality >= 0.45 && frames[it].rms >= reference * 0.35
-        } ?: return 0.0 to -1
-        val bin = frames[anchor].peakBin
+            (frames[it].tonality >= 0.32 || fading) && frames[it].rms >= reference * 0.25
+        } ?: return 0.0
+        val original = frames[anchor].profile
+        val tracking = original.copyOf()
         var firstBad = -1
         var end = duration
         for (i in anchor..frames.lastIndex) {
             val f = frames[i]
             if (f.time > duration) break
-            val stable = f.rms >= max(0.002, reference * 0.18) && f.tonality >= 0.35 &&
-                abs(f.peakBin - bin) <= max(1, bin / 16)
-            if (stable) firstBad = -1 else {
+            val stable = f.rms >= floor && (f.tonality >= 0.22 || fading) &&
+                similarity(f.profile, tracking) >= 0.60 &&
+                similarity(f.profile, original) >= 0.12 &&
+                (!fading || f.rms < reference * 1.25)
+            if (stable) {
+                firstBad = -1
+                for (band in tracking.indices) tracking[band] = 0.9f * tracking[band] + 0.1f * f.profile[band]
+                normalize(tracking)
+            } else {
                 if (firstBad < 0) firstBad = i
-                if (i - firstBad >= 2) { end = frames[firstBad].time; break }
+                if (i - firstBad >= 3) { end = frames[firstBad].time; break }
             }
         }
         val length = (end - start).coerceAtLeast(0.0)
-        return (if (length >= 0.4) length else 0.0) to bin
+        return if (length >= 0.4) length else 0.0
     }
+
+    private fun normalize(profile: FloatArray) {
+        val norm = sqrt(profile.sumOf { it.toDouble() * it })
+        if (norm > 0) for (i in profile.indices) profile[i] = (profile[i] / norm).toFloat()
+    }
+
+    private fun similarity(a: FloatArray, b: FloatArray): Double =
+        a.indices.sumOf { a[it].toDouble() * b[it] }
 
     private fun estimateTempo(times: List<Double>): Double {
         if (times.size < 3) return 0.0
