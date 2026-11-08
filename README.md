@@ -43,7 +43,7 @@ flutter pub get
 flutter analyze
 flutter test
 flutter build apk --release
-cd android && ./gradlew :app:testReleaseUnitTest
+cd android && ./gradlew :app:testDebugUnitTest
 ```
 
 With an Android emulator/device connected:
