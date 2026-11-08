@@ -545,7 +545,7 @@ abstract class AppLocalizations {
   /// No description provided for @startRhythm.
   ///
   /// In en, this message translates to:
-  /// **'Tap START to play the first tile and begin the music.'**
+  /// **'Tap START to begin. Release sliders when their tail reaches the line.'**
   String get startRhythm;
 
   /// No description provided for @rhythmDifficulty.

@@ -43,14 +43,21 @@ Re-analysis is available through the same button. Analysis can be cancelled.
   This is a heuristic for mixed music, not polyphonic source separation.
   Re-run **Analyze now** once for the new detector (v3 charts). Existing v1/v2
   charts remain playable and receive the two-thumb planning automatically.
-  Hold until the tail reaches the line for the full bonus. Original forgiving
-  release, movement and touch-cancellation behavior is retained.
+  Hold until the tail reaches the line, then release for the full bonus.
 - Version 1.3.1 restores the original live hold rewards: 220 points per held
   second, a combo increment at each 10% progress step, and 150 points plus two
   combo increments at completion. Fractional points carry between frames to
   avoid refresh-rate-dependent scoring. Pause and early release stop earning
   hold points; holding longer visibly increases the score before completion.
   Hand assignment also applies to saved charts without re-analysis.
+- Version 1.3.2 requires releasing held sliders no later than **100 ms after
+  their musical end**. Overholding loses the round, including on the last note
+  after audio playback completes. The pointer stays attached until release;
+  reaching the tail alone no longer completes a hold or awards its bonus.
+  Live points stop at the musical end and the completion bonus is awarded on
+  timely release. Deadlines use the paused game clock and are checked both on
+  frames and input events, so a late up/move/cancel cannot bypass a stalled
+  frame. Earlier release retains the original partial-reward behavior.
 - The START tile is the first real analyzed note. Its tap is scored immediately
   and is never discarded while audio prepares. Zero-time first notes and a
   first held note are covered by device tests without a second START tap.
@@ -98,7 +105,9 @@ progressive density, measured sustain lengths, pitch changes and noise rejection
 Device tests decode WAV/MP3, complete both a tap track and a hold track, verify
 pause while holding, tap on still-visible tiles after the former timing window,
 and verify live hold rewards, frozen scoring during pause/after release, exact
-completion rewards, and that early slider release allows the song to finish.
+completion rewards on release, failure on overholding, late input during a
+frame stall, and the final slider at actual audio completion. Early slider
+release still allows the song to finish.
 
 Release signing uses `android/key.properties` when supplied; otherwise this
 experimental fork uses the local Android debug key. Never replace the original

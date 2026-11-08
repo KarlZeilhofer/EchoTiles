@@ -252,7 +252,7 @@ class AppLocalizationsIt extends AppLocalizations {
 
   @override
   String get startRhythm =>
-      'Tocca START per suonare la prima tessera e avviare la musica.';
+      'Tocca START per iniziare. Rilascia le tessere lunghe quando la coda raggiunge la linea.';
 
   @override
   String get rhythmDifficulty =>

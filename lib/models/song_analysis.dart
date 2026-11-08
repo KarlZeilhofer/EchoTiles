@@ -4,8 +4,10 @@ class AnalyzedNote {
   final double duration;
   const AnalyzedNote(this.time, this.lane, {this.duration = 0});
   static const minimumHoldDuration = 1.0;
+  static const holdReleaseTolerance = 0.10;
   bool get isLong => duration >= minimumHoldDuration;
   double get endTime => time + duration;
+  bool isReleaseLate(double time) => time > endTime + holdReleaseTolerance;
 
   Map<String, Object> toJson() => {
     'time': time,

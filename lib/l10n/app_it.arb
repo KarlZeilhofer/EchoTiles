@@ -88,7 +88,7 @@
   "analysisReady": "Ritmo pronto",
   "analysisFailed": "Analisi non riuscita. Prova un altro file audio.",
   "noBeatsFound": "Nessuna nota o battito distinto trovato.",
-  "startRhythm": "Tocca START per suonare la prima tessera e avviare la musica.",
+  "startRhythm": "Tocca START per iniziare. Rilascia le tessere lunghe quando la coda raggiunge la linea.",
   "rhythmDifficulty": "Le tessere accelerano durante il brano. Bastano sempre al massimo due pollici.",
   "analyzeHoldsHint": "Analizza di nuovo per voci e suoni in dissolvenza."
 }

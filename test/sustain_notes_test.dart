@@ -10,6 +10,24 @@ SongAnalysis chart(List<AnalyzedNote> notes) => SongAnalysis.fromJson({
 });
 
 void main() {
+  test('hold release deadline allows 100 ms but rejects overholding', () {
+    for (final duration in [1.0, 1.2, 8.0]) {
+      final note = AnalyzedNote(0.5, 0, duration: duration);
+      expect(note.isReleaseLate(note.endTime - 0.01), isFalse);
+      expect(note.isReleaseLate(note.endTime), isFalse);
+      expect(
+        note.isReleaseLate(note.endTime + AnalyzedNote.holdReleaseTolerance),
+        isFalse,
+      );
+      expect(
+        note.isReleaseLate(
+          note.endTime + AnalyzedNote.holdReleaseTolerance + 0.001,
+        ),
+        isTrue,
+      );
+    }
+  });
+
   test('hold lengths survive lane balancing and save/load', () {
     final analysis = chart(const [
       AnalyzedNote(0.5, 0, duration: 0.6),

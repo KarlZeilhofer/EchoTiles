@@ -172,9 +172,12 @@ void main() {
         await waitForPosition(note.time + 0.8);
         expect(score(), greaterThan(resumeScore + 30));
         final middleScore = score();
-        await waitForPosition(note.endTime + 0.08);
-        expect(score(), greaterThanOrEqualTo(middleScore + 150));
+        await waitForPosition(note.endTime + 0.02);
+        final beforeRelease = score();
+        expect(beforeRelease - middleScore, lessThan(150));
         await gesture.up();
+        await tester.pump();
+        expect(score(), greaterThanOrEqualTo(beforeRelease + 150));
       }
       await tester.pump();
     }

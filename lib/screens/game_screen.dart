@@ -187,28 +187,13 @@ class _GameScreenState extends State<GameScreen>
         tile.length = max(1.0, (tile.y - tile.endY) / _tileHeightFactor);
       }
       if (tile.isHolding) {
-        final heldUntil = time.clamp(note.time, note.endTime);
-        final heldSeconds = max(0.0, heldUntil - tile.holdScoredUntil);
-        tile.holdScoredUntil = heldUntil;
-        // Original reward: 220 points/second while held, ten combo steps,
-        // then a 150-point completion bonus. Keep fractional points across
-        // frames so the reward doesn't depend on the display refresh rate.
-        final points = tile.holdScoreRemainder + heldSeconds * 220;
-        final earned = (points + 1e-9).floor();
-        _score += earned;
-        tile.holdScoreRemainder = points - earned;
-        final previousStep = (tile.holdProgress * 10).floor();
-        tile.holdProgress = ((time - note.time) / note.duration).clamp(
-          0.0,
-          1.0,
-        );
-        final steps = (tile.holdProgress * 10).floor() - previousStep;
-        if (steps > 0) {
-          _combo += steps;
-          _maxCombo = max(_maxCombo, _combo);
-          Haptics.light();
+        _advanceHold(tile, time);
+        // Keep the pointer attached until release, including on the last note.
+        // Holding beyond the tail is a miss, rather than an automatic success.
+        if (note.isReleaseLate(time)) {
+          _triggerGameOver(tile.lane);
+          return;
         }
-        if (time >= note.endTime) _finishHold(tile);
       }
       if (TileHitTest.isMissed(tile)) {
         tile.isMissed = true;
@@ -368,6 +353,29 @@ class _GameScreenState extends State<GameScreen>
     setState(() {});
   }
 
+  void _advanceHold(GameTile tile, double time) {
+    final note = widget.analysis.notes[tile.noteIndex];
+    final heldUntil = time.clamp(note.time, note.endTime);
+    final heldSeconds = max(0.0, heldUntil - tile.holdScoredUntil);
+    tile.holdScoredUntil = heldUntil;
+    // Original live rewards, capped at the musical end. The completion bonus
+    // is awarded separately, only after the player actually releases.
+    final points = tile.holdScoreRemainder + heldSeconds * 220;
+    final earned = (points + 1e-9).floor();
+    _score += earned;
+    tile.holdScoreRemainder = points - earned;
+    final previousStep = (tile.holdProgress * 10).floor();
+    tile.holdProgress = time >= note.endTime
+        ? 1.0
+        : ((time - note.time) / note.duration).clamp(0.0, 1.0);
+    final steps = (tile.holdProgress * 10).floor() - previousStep;
+    if (steps > 0) {
+      _combo += steps;
+      _maxCombo = max(_maxCombo, _combo);
+      Haptics.light();
+    }
+  }
+
   void _finishHold(GameTile tile) {
     tile.isHolding = false;
     tile.isHit = true;
@@ -388,10 +396,8 @@ class _GameScreenState extends State<GameScreen>
         .floor()
         .clamp(0, 3);
     if (lane != tile.lane) {
-      tile.isHolding = false;
-      tile.isHit = true;
       _activeHolds.remove(event.pointer);
-      setState(() {});
+      _releaseHold(tile, cancelled: true);
     }
   }
 
@@ -400,25 +406,38 @@ class _GameScreenState extends State<GameScreen>
     if (id == null) return;
     final tile = _tiles.where((t) => t.id == id && t.isHolding).firstOrNull;
     if (tile == null) return;
-    // Original F-Droid behavior: releasing stops the hold bonus, never the run.
-    tile.isHolding = false;
-    tile.isHit = true;
-    if (tile.holdProgress >= 0.85) {
-      _score += 100;
-      Haptics.medium();
-    }
-    setState(() {});
+    _releaseHold(tile);
   }
 
   void _onPointerCancel(PointerCancelEvent event) {
     final id = _activeHolds.remove(event.pointer);
     if (id == null) return;
     final tile = _tiles.where((t) => t.id == id && t.isHolding).firstOrNull;
-    if (tile != null) {
+    if (tile != null) _releaseHold(tile, cancelled: true);
+  }
+
+  void _releaseHold(GameTile tile, {bool cancelled = false}) {
+    if (_status != GameStatus.playing && _status != GameStatus.paused) return;
+    final time = _time;
+    final note = widget.analysis.notes[tile.noteIndex];
+    // Check input too: a late up/move/cancel must not dodge the next frame's
+    // deadline when rendering stalls. Paused time stays frozen.
+    if (note.isReleaseLate(time)) {
+      _triggerGameOver(tile.lane);
+      return;
+    }
+    _advanceHold(tile, time);
+    if (!cancelled && time >= note.endTime) {
+      _finishHold(tile);
+    } else {
       tile.isHolding = false;
       tile.isHit = true;
-      setState(() {});
+      if (!cancelled && tile.holdProgress >= 0.85) {
+        _score += 100;
+        Haptics.medium();
+      }
     }
+    setState(() {});
   }
 
   @override

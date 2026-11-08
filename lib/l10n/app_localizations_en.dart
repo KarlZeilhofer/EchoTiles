@@ -250,7 +250,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get startRhythm =>
-      'Tap START to play the first tile and begin the music.';
+      'Tap START to begin. Release sliders when their tail reaches the line.';
 
   @override
   String get rhythmDifficulty =>

@@ -88,7 +88,7 @@
   "analysisReady": "Rhythm ready",
   "analysisFailed": "Analysis failed. Try another audio file.",
   "noBeatsFound": "No distinct notes or beats found.",
-  "startRhythm": "Tap START to play the first tile and begin the music.",
+  "startRhythm": "Tap START to begin. Release sliders when their tail reaches the line.",
   "rhythmDifficulty": "Later tiles move faster. Charts always require at most two thumbs.",
   "analyzeHoldsHint": "Analyze again for vocals and fading sounds."
 }

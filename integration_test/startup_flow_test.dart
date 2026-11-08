@@ -76,14 +76,21 @@ void main() {
       await tester.pump();
       expect(find.textContaining('OUT OF RHYTHM'), findsNothing);
       final pos = await AudioService.instance.getCurrentPosition();
-      if (pos != null && pos.inMilliseconds >= 1370) break;
+      if (pos != null && pos.inMilliseconds >= 1320) break;
       await Future<void>.delayed(const Duration(milliseconds: 20));
     }
     expect(
-      tester.widget<Text>(find.byKey(const ValueKey('game-score'))).data,
-      '516', // 102 attack + 1.2 seconds * 220 + 150 completion.
+      int.parse(
+        tester.widget<Text>(find.byKey(const ValueKey('game-score'))).data!,
+      ),
+      lessThanOrEqualTo(366),
     );
     await hold.up();
+    await tester.pump();
+    expect(
+      tester.widget<Text>(find.byKey(const ValueKey('game-score'))).data,
+      '516', // 102 attack + 1.2 seconds * 220 + 150 on release.
+    );
     await finish();
 
     // A dense source becomes a chart that can be completed with two thumbs.
