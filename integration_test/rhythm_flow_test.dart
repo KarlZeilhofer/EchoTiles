@@ -9,6 +9,9 @@ import 'package:integration_test/integration_test.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:echotiles/main.dart';
 import 'package:echotiles/models/game_models.dart';
+import 'package:echotiles/models/app_theme.dart';
+import 'package:echotiles/l10n/app_localizations.dart';
+import 'package:echotiles/screens/game_screen.dart';
 import 'package:echotiles/services/analysis_service.dart';
 import 'package:echotiles/services/audio_service.dart';
 import 'package:echotiles/services/song_catalog.dart';
@@ -80,6 +83,61 @@ void main() {
     expect((await service.load(song))!.notes.length, clicks.notes.length);
     await service.remove(song);
     expect(await service.load(song), isNull);
+
+    // Play the whole synthetic track using the real native playback position.
+    // This exercises clock sync and touch judgment after the lead-in, rather
+    // than only checking the ready/paused screens.
+    await tester.pumpWidget(
+      MaterialApp(
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        home: GameScreen(
+          song: song,
+          analysis: clicks,
+          appTheme: AppThemes.fromName('amoled'),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    final gameSize = tester.view.physicalSize / tester.view.devicePixelRatio;
+    await tester.tapAt(
+      Offset(
+        gameSize.width * (clicks.notes.first.lane + 0.5) / 4,
+        gameSize.height * 0.8,
+      ),
+    );
+    await tester.pump();
+    final playbackDeadline = Stopwatch()..start();
+    for (final note in clicks.notes) {
+      while (true) {
+        await tester.pump();
+        expect(find.textContaining('OUT OF RHYTHM'), findsNothing);
+        if (playbackDeadline.elapsed > const Duration(seconds: 15)) {
+          fail('Playback did not reach note at ${note.time}s');
+        }
+        final position = await AudioService.instance.getCurrentPosition();
+        if (position != null &&
+            position.inMicroseconds / 1000000 >= note.time - 0.025) {
+          break;
+        }
+        await Future<void>.delayed(const Duration(milliseconds: 20));
+      }
+      await tester.tapAt(
+        Offset(gameSize.width * (note.lane + 0.5) / 4, gameSize.height * 0.8),
+      );
+      await tester.pump();
+    }
+    while (find.textContaining('SONG COMPLETED').evaluate().isEmpty) {
+      await tester.pump();
+      expect(find.textContaining('OUT OF RHYTHM'), findsNothing);
+      if (playbackDeadline.elapsed > const Duration(seconds: 15)) {
+        fail('Timed taps did not complete the track');
+      }
+      await Future<void>.delayed(const Duration(milliseconds: 20));
+    }
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump();
 
     // Silence must produce a useful error rather than a fabricated chart.
     for (var i = 44; i < data.lengthInBytes; i++) {

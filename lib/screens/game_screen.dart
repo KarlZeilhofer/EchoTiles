@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'dart:math';
-import 'dart:ui';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
@@ -10,6 +9,8 @@ import '../models/app_theme.dart';
 import '../models/game_models.dart';
 import '../models/song_analysis.dart';
 import '../models/rhythm_timeline.dart';
+import '../models/playback_clock.dart';
+import '../models/rhythm_judgment.dart';
 import '../services/audio_service.dart';
 import '../services/haptics.dart';
 import '../services/storage_service.dart';
@@ -35,15 +36,20 @@ class _GameScreenState extends State<GameScreen>
   static const double _targetLineFactor = 0.80;
   static const double _tileHeightFactor = 0.20;
   late Ticker _ticker;
-  final Stopwatch _clock = Stopwatch();
-  double _clockBase = -2.0;
+  final Stopwatch _monotonic = Stopwatch();
+  late final PlaybackClock _clock;
+  final ValueNotifier<int> _frames = ValueNotifier<int>(0);
+  int _lastHudTick = -1;
+  Duration _lastFrameTimestamp = Duration.zero;
+  double _lastFrameMonotonic = 0;
+  int _lastHitLane = -1;
+  double _lastHitTime = double.negativeInfinity;
   bool _audioStarted = false;
   bool _audioStarting = false;
   int _generation = 0;
   GameStatus _status = GameStatus.ready;
   final List<GameTile> _tiles = [];
   final List<HitFeedback> _feedbacks = [];
-  final Map<int, int> _activePointerTiles = {};
   int _score = 0;
   int _combo = 0;
   int _maxCombo = 0;
@@ -53,11 +59,14 @@ class _GameScreenState extends State<GameScreen>
   StreamSubscription<Duration>? _positionSub;
   StreamSubscription<void>? _completeSub;
 
-  double get _time => _clockBase + _clock.elapsedMicroseconds / 1000000;
+  double get _monotonicTime => _monotonic.elapsedMicroseconds / 1000000;
+  double get _time => _clock.position;
 
   @override
   void initState() {
     super.initState();
+    _monotonic.start();
+    _clock = PlaybackClock(now: () => _monotonicTime);
     WidgetsBinding.instance.addObserver(this);
     _ticker = createTicker(_onTick);
     _initLevel();
@@ -65,14 +74,12 @@ class _GameScreenState extends State<GameScreen>
       if (!_audioStarted || _audioStarting || _status != GameStatus.playing) {
         return;
       }
-      _clockBase = pos.inMicroseconds / 1000000;
-      _clock.reset();
+      _clock.synchronize(pos.inMicroseconds / 1000000);
     });
     _completeSub = AudioService.instance.onPlayerComplete.listen((_) {
       if (mounted && _status == GameStatus.playing) {
         // Keep the judgment window open for a note right at the end.
-        _clockBase = widget.analysis.duration;
-        _clock.reset();
+        _clock.synchronize(widget.analysis.duration);
       }
     });
   }
@@ -87,9 +94,10 @@ class _GameScreenState extends State<GameScreen>
   void _initLevel() {
     _generation++;
     if (_ticker.isActive) _ticker.stop();
-    _clock.stop();
-    _clock.reset();
-    _clockBase = -2;
+    _clock.reset(-2);
+    _lastHudTick = -1;
+    _lastHitLane = -1;
+    _lastHitTime = double.negativeInfinity;
     _audioStarted = false;
     _audioStarting = false;
     _status = GameStatus.ready;
@@ -101,7 +109,6 @@ class _GameScreenState extends State<GameScreen>
     _songProgress = 0;
     _tiles.clear();
     _feedbacks.clear();
-    _activePointerTiles.clear();
     _tiles.add(
       GameTile(
         id: 0,
@@ -116,15 +123,15 @@ class _GameScreenState extends State<GameScreen>
     final generation = _generation;
     _audioStarting = true;
     _audioStarted = true;
-    _clock.stop();
-    _clock.reset();
-    _clockBase = 0;
+    _clock.reset(0);
     try {
       await AudioService.instance.playSong(widget.song.assetAudio);
+      final position = await AudioService.instance.getCurrentPosition();
       if (!mounted || generation != _generation) return;
+      _clock.reset((position?.inMicroseconds ?? 0) / 1000000);
       _audioStarting = false;
       if (_status == GameStatus.playing) {
-        _clock.start();
+        _clock.resume();
       } else {
         await AudioService.instance.pauseSong();
       }
@@ -140,55 +147,63 @@ class _GameScreenState extends State<GameScreen>
 
   void _onTick(Duration elapsed) {
     if (_status != GameStatus.playing) return;
+    _lastFrameTimestamp = SchedulerBinding.instance.currentSystemFrameTimeStamp;
+    _lastFrameMonotonic = _monotonicTime;
     if (!_audioStarted && _time >= 0) _beginAudio();
     final time = _time;
     final analysis = widget.analysis;
-    setState(() {
-      _songProgress = (time / analysis.duration).clamp(0.0, 1.0);
-      while (_nextTileIndex < analysis.notes.length) {
-        final note = analysis.notes[_nextTileIndex];
-        final y = RhythmTimeline.position(note.time, time, analysis.duration);
-        if (y < -0.25) break;
-        _tiles.add(
-          GameTile(
-            id: _nextTileIndex + 1,
-            lane: note.lane,
-            y: y,
-            noteIndex: _nextTileIndex,
-          ),
-        );
-        _nextTileIndex++;
+    _songProgress = (time / analysis.duration).clamp(0.0, 1.0);
+    while (_nextTileIndex < analysis.notes.length) {
+      final note = analysis.notes[_nextTileIndex];
+      final y = RhythmTimeline.position(note.time, time, analysis.duration);
+      if (y < -0.25) break;
+      _tiles.add(
+        GameTile(
+          id: _nextTileIndex + 1,
+          lane: note.lane,
+          y: y,
+          noteIndex: _nextTileIndex,
+        ),
+      );
+      _nextTileIndex++;
+    }
+    for (final tile in _tiles) {
+      final note = analysis.notes[tile.noteIndex];
+      tile.y = RhythmTimeline.position(note.time, time, analysis.duration);
+      if (!tile.isHit && RhythmJudgment.isOverdue(note.time, time)) {
+        tile.isMissed = true;
+        _triggerGameOver(tile.lane);
+        return;
       }
-      for (final tile in _tiles) {
-        final note = analysis.notes[tile.noteIndex];
-        tile.y = RhythmTimeline.position(note.time, time, analysis.duration);
-        if (!tile.isHit && time - note.time > 0.16) {
-          tile.isMissed = true;
-          _triggerGameOver(tile.lane);
-          return;
-        }
-      }
-      _tiles.removeWhere((t) => t.isHit && t.y > 1.3);
-      final now = DateTime.now().millisecondsSinceEpoch;
-      _feedbacks.removeWhere((f) => now - f.timestamp > 700);
-      if (time >= analysis.duration &&
-          _nextTileIndex == analysis.notes.length &&
-          _tiles.every((t) => t.isHit)) {
-        _triggerVictory();
-      }
-    });
+    }
+    _tiles.removeWhere((t) => t.isHit && t.y > 1.3);
+    final now = DateTime.now().millisecondsSinceEpoch;
+    _feedbacks.removeWhere((f) => now - f.timestamp > 700);
+    if (time >= analysis.duration &&
+        _nextTileIndex == analysis.notes.length &&
+        _tiles.every((t) => t.isHit)) {
+      _triggerVictory();
+      return;
+    }
+    // Tiles repaint at vsync; score/progress/countdown widgets update at 10 Hz.
+    _frames.value++;
+    final hudTick = (time * 10).floor();
+    if (hudTick != _lastHudTick) {
+      _lastHudTick = hudTick;
+      setState(() {});
+    }
   }
 
   void _startGame() {
     _tiles.clear();
     _status = GameStatus.playing;
-    _clock.start();
+    _clock.resume();
     _ticker.start();
   }
 
   void _pauseGame() {
     if (_status != GameStatus.playing) return;
-    _clock.stop();
+    _clock.pause();
     _ticker.stop();
     setState(() => _status = GameStatus.paused);
     if (_audioStarted) AudioService.instance.pauseSong();
@@ -201,14 +216,14 @@ class _GameScreenState extends State<GameScreen>
     }
     if (!mounted || _status != GameStatus.paused) return;
     setState(() => _status = GameStatus.playing);
-    if (!_audioStarting) _clock.start();
+    if (!_audioStarting) _clock.resume();
     _ticker.start();
   }
 
   void _triggerGameOver(int lane, [Offset? mistapOffset]) {
     _status = GameStatus.gameOver;
     _failedLane = lane;
-    _clock.stop();
+    _clock.pause();
     _ticker.stop();
     AudioService.instance.stopSong();
     Haptics.heavy();
@@ -229,13 +244,14 @@ class _GameScreenState extends State<GameScreen>
 
   void _triggerVictory() {
     _status = GameStatus.victory;
-    _clock.stop();
+    _clock.pause();
     _ticker.stop();
     AudioService.instance.stopSong();
     Haptics.medium();
     StorageService.setHighScore(widget.song.id, _score);
     StorageService.setStars(widget.song.id, _calculateStars());
     StorageService.setBestCombo(_maxCombo);
+    setState(() {});
   }
 
   int _calculateStars() {
@@ -254,29 +270,55 @@ class _GameScreenState extends State<GameScreen>
     if (_status == GameStatus.ready) {
       final start = _tiles.first;
       if (lane == start.lane &&
-          tapY / screenSize.height >= start.y - _tileHeightFactor &&
-          tapY / screenSize.height <= start.y + 0.04) {
+          tapY / screenSize.height >= start.y - _tileHeightFactor / 2 - 0.025 &&
+          tapY / screenSize.height <= start.y + _tileHeightFactor / 2 + 0.025) {
         _startGame();
         setState(() {});
       }
       return;
     }
     if (_time < 0 || _audioStarting) return;
-    final candidates = _tiles.where((t) => !t.isHit && t.lane == lane).toList()
-      ..sort((a, b) => a.noteIndex.compareTo(b.noteIndex));
-    final tile = candidates.firstOrNull;
-    final distance = tile == null
-        ? double.infinity
-        : (widget.analysis.notes[tile.noteIndex].time - _time).abs();
-    if (tile == null || distance > 0.16) {
+    final inputTime = RhythmJudgment.inputTime(
+      songTime: _time,
+      eventTime: event.timeStamp,
+      frameTime: _lastFrameTimestamp,
+      elapsedSinceFrame: _monotonicTime - _lastFrameMonotonic,
+    );
+    final laneWidth = screenSize.width / 4;
+    final edgeTolerance = min(10.0, laneWidth * 0.10);
+    GameTile? tile;
+    var quality = HitQuality.miss;
+    var bestDistance = double.infinity;
+    for (final candidate in _tiles) {
+      if (candidate.isHit || candidate.isMissed) continue;
+      // A touch just across a lane divider should still hit the nearby tile.
+      if (tapX < candidate.lane * laneWidth - edgeTolerance ||
+          tapX > (candidate.lane + 1) * laneWidth + edgeTolerance) {
+        continue;
+      }
+      final noteTime = widget.analysis.notes[candidate.noteIndex].time;
+      final candidateQuality = RhythmJudgment.quality(noteTime, inputTime);
+      if (candidateQuality == HitQuality.miss) continue;
+      final distance =
+          (noteTime - inputTime).abs() + (candidate.lane == lane ? 0 : 0.04);
+      if (distance < bestDistance) {
+        tile = candidate;
+        quality = candidateQuality;
+        bestDistance = distance;
+      }
+    }
+    if (tile == null) {
+      // Ignore touchscreen bounce without suppressing real notes on other lanes.
+      if (lane == _lastHitLane &&
+          inputTime - _lastHitTime >= 0 &&
+          inputTime - _lastHitTime < 0.08) {
+        return;
+      }
       _triggerGameOver(lane, Offset(tapX, tapY));
       return;
     }
-    final quality = distance < 0.05
-        ? HitQuality.perfect
-        : distance < 0.10
-        ? HitQuality.great
-        : HitQuality.good;
+    _lastHitLane = tile.lane;
+    _lastHitTime = inputTime;
     _combo++;
     _maxCombo = max(_maxCombo, _combo);
     _score +=
@@ -299,59 +341,14 @@ class _GameScreenState extends State<GameScreen>
     setState(() {});
   }
 
-  void _onPointerMove(PointerMoveEvent event, Size screenSize) {
-    final tileId = _activePointerTiles[event.pointer];
-    if (tileId != null) {
-      final tile = _tiles.where((t) => t.id == tileId).firstOrNull;
-      if (tile != null && tile.isHolding) {
-        final laneWidth = screenSize.width / 4;
-        final currentLane = (event.localPosition.dx / laneWidth).floor().clamp(
-          0,
-          3,
-        );
-        if (currentLane != tile.lane) {
-          tile.isHolding = false;
-          tile.isHit = true;
-          _activePointerTiles.remove(event.pointer);
-        }
-      }
-    }
-  }
-
-  void _onPointerUp(PointerUpEvent event) {
-    final tileId = _activePointerTiles.remove(event.pointer);
-    if (tileId != null) {
-      for (final tile in _tiles) {
-        if (tile.id == tileId && tile.isHolding) {
-          tile.isHolding = false;
-          tile.isHit = true;
-          if (tile.holdProgress >= 0.85) {
-            _score += 100;
-            Haptics.medium();
-          }
-        }
-      }
-    }
-  }
-
-  void _onPointerCancel(PointerCancelEvent event) {
-    final tileId = _activePointerTiles.remove(event.pointer);
-    if (tileId != null) {
-      for (final tile in _tiles) {
-        if (tile.id == tileId && tile.isHolding) {
-          tile.isHolding = false;
-          tile.isHit = true;
-        }
-      }
-    }
-  }
-
   @override
   void dispose() {
     _generation++;
     WidgetsBinding.instance.removeObserver(this);
-    _clock.stop();
+    _clock.pause();
     _ticker.dispose();
+    _frames.dispose();
+    _monotonic.stop();
     _positionSub?.cancel();
     _completeSub?.cancel();
     AudioService.instance.stopSong();
@@ -379,21 +376,21 @@ class _GameScreenState extends State<GameScreen>
                 final size = Size(constraints.maxWidth, constraints.maxHeight);
                 return Listener(
                   onPointerDown: (e) => _onPointerDown(e, size),
-                  onPointerMove: (e) => _onPointerMove(e, size),
-                  onPointerUp: _onPointerUp,
-                  onPointerCancel: _onPointerCancel,
-                  child: CustomPaint(
-                    size: size,
-                    painter: _GameTilesPainter(
-                      tiles: _tiles,
-                      feedbacks: _feedbacks,
-                      appTheme: theme,
-                      failedLane: _failedLane,
-                      isReady: _status == GameStatus.ready,
-                      targetLineFactor: _targetLineFactor,
-                      tileHeightFactor: _tileHeightFactor,
-                      startLabel: l10n.start,
-                      qualityLabels: qualityLabels,
+                  child: RepaintBoundary(
+                    child: CustomPaint(
+                      size: size,
+                      painter: _GameTilesPainter(
+                        repaint: _frames,
+                        tiles: _tiles,
+                        feedbacks: _feedbacks,
+                        appTheme: theme,
+                        failedLane: _failedLane,
+                        isReady: _status == GameStatus.ready,
+                        targetLineFactor: _targetLineFactor,
+                        tileHeightFactor: _tileHeightFactor,
+                        startLabel: l10n.start,
+                        qualityLabels: qualityLabels,
+                      ),
                     ),
                   ),
                 );
@@ -443,107 +440,104 @@ class _GameScreenState extends State<GameScreen>
   }
 
   Widget _buildHeader(AppThemeData theme) {
-    return ClipRect(
-      child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
-        child: Container(
-          decoration: BoxDecoration(
-            color: theme.surface.withValues(alpha: 0.82),
-            border: Border(
-              bottom: BorderSide(
-                color: theme.border.withValues(alpha: 0.4),
-                width: 1.8,
-              ),
+    return RepaintBoundary(
+      child: Container(
+        decoration: BoxDecoration(
+          color: theme.surface,
+          border: Border(
+            bottom: BorderSide(
+              color: theme.border.withValues(alpha: 0.4),
+              width: 1.8,
             ),
           ),
-          child: SafeArea(
-            bottom: false,
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      IconButton(
-                        icon: Icon(
-                          Icons.arrow_back_ios_new_rounded,
-                          color: theme.textPrimary,
-                          size: 22,
-                        ),
-                        onPressed: () {
-                          Haptics.select();
-                          Navigator.of(context).pop();
-                        },
+        ),
+        child: SafeArea(
+          bottom: false,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    IconButton(
+                      icon: Icon(
+                        Icons.arrow_back_ios_new_rounded,
+                        color: theme.textPrimary,
+                        size: 22,
                       ),
-                      Column(
-                        children: [
-                          Text(
-                            '$_score',
-                            style: TextStyle(
-                              fontFamily: 'Fredoka',
-                              fontSize: 30,
-                              fontWeight: FontWeight.w900,
-                              color: theme.textPrimary,
+                      onPressed: () {
+                        Haptics.select();
+                        Navigator.of(context).pop();
+                      },
+                    ),
+                    Column(
+                      children: [
+                        Text(
+                          '$_score',
+                          style: TextStyle(
+                            fontFamily: 'Fredoka',
+                            fontSize: 30,
+                            fontWeight: FontWeight.w900,
+                            color: theme.textPrimary,
+                          ),
+                        ),
+                        if (_combo > 1)
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 10,
+                              vertical: 2,
+                            ),
+                            decoration: BoxDecoration(
+                              color: theme.playBg,
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Text(
+                              AppLocalizations.of(context).comboLabel(_combo),
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 11,
+                                fontWeight: FontWeight.w900,
+                                letterSpacing: 1.0,
+                              ),
                             ),
                           ),
-                          if (_combo > 1)
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 10,
-                                vertical: 2,
-                              ),
-                              decoration: BoxDecoration(
-                                color: theme.playBg,
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                              child: Text(
-                                AppLocalizations.of(context).comboLabel(_combo),
-                                style: const TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 11,
-                                  fontWeight: FontWeight.w900,
-                                  letterSpacing: 1.0,
-                                ),
-                              ),
-                            ),
-                        ],
-                      ),
-                      IconButton(
-                        icon: Icon(
-                          _status == GameStatus.paused
-                              ? Icons.play_arrow_rounded
-                              : Icons.pause_rounded,
-                          color: theme.textPrimary,
-                          size: 28,
-                        ),
-                        onPressed: () {
-                          Haptics.select();
-                          if (_status == GameStatus.playing ||
-                              _status == GameStatus.ready) {
-                            _pauseGame();
-                          } else if (_status == GameStatus.paused) {
-                            _resumeGame();
-                          }
-                        },
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 6),
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(6),
-                    child: LinearProgressIndicator(
-                      value: _songProgress,
-                      minHeight: 6,
-                      backgroundColor: theme.surfaceVariant.withValues(
-                        alpha: 0.6,
-                      ),
-                      valueColor: AlwaysStoppedAnimation<Color>(theme.playBg),
+                      ],
                     ),
+                    IconButton(
+                      icon: Icon(
+                        _status == GameStatus.paused
+                            ? Icons.play_arrow_rounded
+                            : Icons.pause_rounded,
+                        color: theme.textPrimary,
+                        size: 28,
+                      ),
+                      onPressed: () {
+                        Haptics.select();
+                        if (_status == GameStatus.playing ||
+                            _status == GameStatus.ready) {
+                          _pauseGame();
+                        } else if (_status == GameStatus.paused) {
+                          _resumeGame();
+                        }
+                      },
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 6),
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(6),
+                  child: LinearProgressIndicator(
+                    value: _songProgress,
+                    minHeight: 6,
+                    backgroundColor: theme.surfaceVariant.withValues(
+                      alpha: 0.6,
+                    ),
+                    valueColor: AlwaysStoppedAnimation<Color>(theme.playBg),
                   ),
-                ],
-              ),
+                ),
+              ],
             ),
           ),
         ),
@@ -808,6 +802,7 @@ class _GameTilesPainter extends CustomPainter {
   final Map<HitQuality, String> qualityLabels;
 
   _GameTilesPainter({
+    required Listenable repaint,
     required this.tiles,
     required this.feedbacks,
     required this.appTheme,
@@ -817,7 +812,7 @@ class _GameTilesPainter extends CustomPainter {
     required this.tileHeightFactor,
     required this.startLabel,
     required this.qualityLabels,
-  });
+  }) : super(repaint: repaint);
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -859,7 +854,7 @@ class _GameTilesPainter extends CustomPainter {
 
       final tileX = tile.lane * laneWidth;
       final tileHeight = size.height * tileHeightFactor * tile.length;
-      final tileY = (tile.y * size.height) - tileHeight;
+      final tileY = (tile.y * size.height) - tileHeight / 2;
 
       final rect = Rect.fromLTWH(
         tileX + 2.0,
@@ -952,6 +947,14 @@ class _GameTilesPainter extends CustomPainter {
           ..style = PaintingStyle.stroke
           ..strokeWidth = 2.0;
         canvas.drawRect(rect, borderPaint);
+        final marker = Paint()
+          ..color = Colors.white.withValues(alpha: 0.8)
+          ..strokeWidth = 3;
+        canvas.drawLine(
+          Offset(tileX + laneWidth * 0.3, tile.y * size.height),
+          Offset(tileX + laneWidth * 0.7, tile.y * size.height),
+          marker,
+        );
       }
 
       if (isReady && tile.id == 0) {

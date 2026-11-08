@@ -164,7 +164,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get singleTapPoint1 =>
-      'Tap the correct lane as the lower edge of the tile reaches the judgment line.';
+      'Tap the correct lane when the center mark of the tile reaches the judgment line.';
 
   @override
   String get singleTapPoint2 => 'Timing within 50 ms gives a PERFECT rating.';

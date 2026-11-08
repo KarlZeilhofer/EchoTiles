@@ -25,6 +25,12 @@ class AudioService {
   Stream<void> get onPlayerComplete => _musicPlayer.onPlayerComplete;
 
   Future<void> init() async {
+    // Poll native audio time independently of vsync. A frame-by-frame platform
+    // round trip competes with animation and touch handling on slower phones.
+    _musicPlayer.positionUpdater = TimerPositionUpdater(
+      getPosition: _musicPlayer.getCurrentPosition,
+      interval: const Duration(milliseconds: 100),
+    );
     await _musicPlayer.setReleaseMode(ReleaseMode.stop);
     await _musicPlayer.setVolume(StorageService.getSoundEnabled() ? 1.0 : 0.0);
     await _musicPlayer.setPlaybackRate(1.0);

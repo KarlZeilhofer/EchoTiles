@@ -395,7 +395,7 @@ abstract class AppLocalizations {
   /// No description provided for @singleTapPoint1.
   ///
   /// In en, this message translates to:
-  /// **'Tap the correct lane as the lower edge of the tile reaches the judgment line.'**
+  /// **'Tap the correct lane when the center mark of the tile reaches the judgment line.'**
   String get singleTapPoint1;
 
   /// No description provided for @singleTapPoint2.

@@ -63,7 +63,7 @@
   "howToPlayTitle": "COME SI GIOCA",
   "singleTapTitle": "TILES A TOCCO SINGOLO",
   "singleTapSubtitle": "Tocca ogni tile proprio quando raggiunge la linea in basso.",
-  "singleTapPoint1": "Tocca la corsia corretta quando il bordo inferiore della tessera raggiunge la linea.",
+  "singleTapPoint1": "Tocca la corsia corretta quando il segno centrale della tessera raggiunge la linea.",
   "singleTapPoint2": "Un tocco entro 50 ms dà una valutazione PERFECT.",
   "singleTapPoint3": "Un singolo tocco rimuove subito il tile.",
   "holdTilesTitle": "TIENI PREMUTO I TILES",

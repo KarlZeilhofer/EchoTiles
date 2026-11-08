@@ -63,7 +63,7 @@
   "howToPlayTitle": "HOW TO PLAY",
   "singleTapTitle": "SINGLE TAP TILES",
   "singleTapSubtitle": "Tap each tile right as it hits the bottom line.",
-  "singleTapPoint1": "Tap the correct lane as the lower edge of the tile reaches the judgment line.",
+  "singleTapPoint1": "Tap the correct lane when the center mark of the tile reaches the judgment line.",
   "singleTapPoint2": "Timing within 50 ms gives a PERFECT rating.",
   "singleTapPoint3": "A single tap clears the tile immediately.",
   "holdTilesTitle": "HOLD TILES",

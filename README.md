@@ -29,13 +29,21 @@ Re-analysis is available through the same button. Analysis can be cancelled.
   heights/second (2.5×). Notes still arrive at the judgment line on their detected
   audio timestamps; the audio itself is not sped up. Sparse passages stay sparse.
 - This mode uses single-tap notes rather than randomly generated holds/chords.
-  PERFECT/ GREAT/ GOOD timing windows are 50/100/160 ms; later misses end the run.
+  PERFECT/ GREAT/ GOOD timing windows are 50/100/220 ms. The tile's center mark
+  crosses the judgment line at the onset. Touch hardware timestamps compensate
+  up to 120 ms of input dispatch delay; misses wait for that grace period.
+  A small lane-edge tolerance and 80 ms same-lane bounce suppression prevent
+  accidental extra failures.
 - Versioned JSON charts are saved in app-private files and reused after restart.
   Local file size/modification time is checked when loading from disk. Analyze
   again if a content-URI recording has been replaced. Songs longer than one hour
   are rejected to bound analysis resources.
-- Pause/background transitions freeze the game clock; playback position updates
-  keep the interpolated visual clock aligned. Muting still advances playback.
+- A monotonic playback clock eases audio drift at at most ±10% rather than
+  snapping on each sample; position queries run at 10 Hz instead of each vsync.
+  Tiles repaint at vsync without rebuilding the widget tree. The opaque HUD
+  updates at 10 Hz and no longer blurs the moving background.
+- Pause/background transitions freeze the game clock. Muting still advances
+  playback. Device tests play an entire synthetic click track to completion.
 
 ## Build and verify
 

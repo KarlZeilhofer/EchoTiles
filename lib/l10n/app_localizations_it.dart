@@ -165,7 +165,7 @@ class AppLocalizationsIt extends AppLocalizations {
 
   @override
   String get singleTapPoint1 =>
-      'Tocca la corsia corretta quando il bordo inferiore della tessera raggiunge la linea.';
+      'Tocca la corsia corretta quando il segno centrale della tessera raggiunge la linea.';
 
   @override
   String get singleTapPoint2 =>
