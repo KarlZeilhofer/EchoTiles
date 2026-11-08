@@ -17,7 +17,11 @@ Re-analysis is available through the same button. Analysis can be cancelled.
   formats use the system decoder; unsupported/corrupt/silent files show errors.
 - Streaming 22.05 kHz mono analysis, 1024-sample Hann FFT, positive log spectral
   flux, adaptive local threshold and peak picking. No whole-song PCM buffer.
-- Tiles follow actual detected onsets. Spectral brightness assigns four lanes;
+- Tiles follow actual detected onsets. Spectral brightness suggests a lane, then
+  a deterministic allocator uses all four lanes in each group of four notes and
+  avoids consecutive notes in the same lane. Version 1.1.1 also applies this to
+  existing saved charts automatically; **no re-analysis is required**.
+  Musical onset times, density and progressive scroll speed are preserved;
   this is onset detection, **not polyphonic pitch transcription**. Tempo is an
   approximate estimate and does not quantize or replace the detected timestamps.
 - Progressive difficulty: onset spacing decreases from 380 ms near the beginning

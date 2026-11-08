@@ -67,6 +67,8 @@ void main() {
     final clicks = await service.analyze(song);
     expect(clicks.notes.length, inInclusiveRange(8, 10));
     expect(clicks.bpm, closeTo(120, 5));
+    // Repeated identical tones must still populate every lane.
+    expect(clicks.notes.map((n) => n.lane).toSet(), {0, 1, 2, 3});
     expect(
       clicks.notes.every(
         (n) =>
@@ -92,7 +94,15 @@ void main() {
     final analysis = await service.analyze(bundled);
     expect(analysis.duration, greaterThan(30));
     expect(analysis.notes.length, greaterThan(30));
-    expect(analysis.notes.map((n) => n.lane).toSet().length, greaterThan(1));
+    expect(analysis.notes.map((n) => n.lane).toSet(), {0, 1, 2, 3});
+    for (var start = 0; start + 4 <= analysis.notes.length; start += 4) {
+      expect(analysis.notes.skip(start).take(4).map((n) => n.lane).toSet(), {
+        0,
+        1,
+        2,
+        3,
+      });
+    }
     debugPrint(
       'MP3 analysis: ${analysis.duration}s, ${analysis.notes.length} notes, ~${analysis.bpm} BPM',
     );

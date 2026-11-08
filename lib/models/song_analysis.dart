@@ -55,6 +55,32 @@ class SongAnalysis {
         throw const FormatException('Unsorted analysis');
       }
     }
-    return SongAnalysis(duration: duration, bpm: bpm, notes: notes);
+    return SongAnalysis(
+      duration: duration,
+      bpm: bpm,
+      notes: _distributeLanes(notes),
+    );
+  }
+
+  // Balance each group of four notes while preferring the lane suggested by
+  // spectral brightness. Apply at the shared decoding boundary so existing
+  // saved charts benefit too, without repeating the expensive audio analysis.
+  // Already-balanced charts retain their layout when loaded again.
+  static List<AnalyzedNote> _distributeLanes(List<AnalyzedNote> notes) {
+    final available = <int>{};
+    final result = <AnalyzedNote>[];
+    var previous = -1;
+    for (final note in notes) {
+      if (available.isEmpty) available.addAll([0, 1, 2, 3]);
+      final candidates = available.where((lane) => lane != previous);
+      int cost(int lane) =>
+          (lane - note.lane).abs() * 8 +
+          (previous < 0 ? 0 : (lane - previous).abs());
+      final lane = candidates.reduce((a, b) => cost(a) <= cost(b) ? a : b);
+      result.add(AnalyzedNote(note.time, lane));
+      available.remove(lane);
+      previous = lane;
+    }
+    return result;
   }
 }
