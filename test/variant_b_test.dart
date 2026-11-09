@@ -41,18 +41,20 @@ void main() {
             .where((n) => n.time >= start && n.time < start + 10)
             .length;
         counts.add(count);
-        final expected = 10 * RhythmChartPlanner.density(start + 5, 120, 0.5);
+        final expected = 10 * RhythmChartPlanner.density(start + 5, 120, 1.5);
         expect(count, closeTo(expected, 1), reason: 'Window $start');
       }
-      expect(counts.first, 5);
-      expect(counts.last, 12);
-      expect(notes.where((n) => n.time < 10).map((n) => n.time), [
-        0,
-        2,
-        4,
-        6,
-        8,
-      ]);
+      expect(counts.first, 16);
+      expect(counts.last, 37);
+      final intro = notes.where((n) => n.time < 10).toList();
+      expect(
+        intro.map((n) => n.time),
+        containsAll([for (var i = 0; i < 10; i++) i.toDouble()]),
+      );
+      expect(
+        intro.where((n) => n.time % 1 == 0.5).length,
+        greaterThanOrEqualTo(5),
+      );
       expect(
         notes.where((n) => n.time >= 110).any((n) => n.time % 1 == 0.5),
         isTrue,
@@ -135,7 +137,7 @@ void main() {
       final a = SongAnalysis.fromJson(raw, variant: TileVariant.a);
       final b = SongAnalysis.fromJson(raw, variant: TileVariant.b);
       expect(a.notes.length, 240);
-      expect(b.notes.length, lessThan(a.notes.length));
+      expect(b.notes.length, isNot(a.notes.length));
       expect(a.toJson(), b.toJson());
       expect(
         SongAnalysis.fromJson(
@@ -146,6 +148,22 @@ void main() {
       );
     },
   );
+
+  test('a quiet rest of the song cannot thin an active introduction', () {
+    final input = pulseGrid(10);
+    final notes = RhythmChartPlanner.plan(input, 120, 120);
+    expect(notes.where((n) => n.time < 10).length, 16);
+    expect(notes.every((n) => n.time < 10), isTrue);
+    expectHands(notes);
+  });
+
+  test('unknown tempo also gets an active intro without fabricated notes', () {
+    final input = pulseGrid(120);
+    final notes = RhythmChartPlanner.plan(input, 0, 120);
+    expect(notes.where((n) => n.time < 10).length, 16);
+    expect(notes.every((n) => input.any((c) => c.note.time == n.time)), isTrue);
+    expectHands(notes);
+  });
 
   test('sliders are capped at four seconds for both old and new analyses', () {
     for (final version in [1, 2, 3, 4]) {

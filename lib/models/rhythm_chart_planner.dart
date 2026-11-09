@@ -20,7 +20,10 @@ class RhythmChartPlanner {
     double duration,
   ) {
     if (input.isEmpty) return [];
-    final baseRate = min(bpm > 0 ? bpm / 240 : 0.5, input.length / duration);
+    // Start with roughly three attacks per four beats, rather than one per
+    // bar. Quiet sections elsewhere must not thin an otherwise active intro;
+    // each window already limits selection to its actual playable onsets.
+    final baseRate = bpm > 0 ? bpm / 80 : 1.5;
     final result = <AnalyzedNote>[];
     final busyUntil = [0.0, 0.0];
     final laneBag = <int>{};

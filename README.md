@@ -2,7 +2,7 @@
 
 Android rhythm-analysis fork of [Sidhant’s EchoTiles](https://github.com/sidhant947/EchoTiles).
 
-## Try version 1.4.0
+## Try version 1.4.1
 
 Download the APK at **https://alpenchat.at/downloads/** and install over the
 existing test app. It has a separate application ID
@@ -38,10 +38,13 @@ Engine/schema changes must bump `SongAnalysis.version` to invalidate old data.
   half and quarter bars before finer/off-grid accents. Four beats per bar is
   a ranking assumption, not automatic time-signature transcription. The grid
   ranks measured onsets; timestamps are never snapped or fabricated.
-- B’s target tile rate starts at approximately one per four beats and rises
+- Since 1.4.1, B’s target tile rate starts at approximately three per four beats
+  (about 15 tiles/10 seconds at 120 BPM, previously 5) and rises
   linearly to 2.5×. Each 10-second budget integrates this rate, carrying only
   fractional rounding. Quiet passages or occupied thumbs may stay below the
   target; missed quotas do not accumulate and flood the next passage.
+  Quiet sections elsewhere no longer reduce the starting target. Existing v4
+  audio evidence is reused; charts are rebuilt with the new density on load.
 - B allows extra accents beside a held note on the free thumb. Strong attacks
   with independent low and high spectral energy can produce two simultaneous
   taps, one per hand, within the same tile budget. The first START stays single.
