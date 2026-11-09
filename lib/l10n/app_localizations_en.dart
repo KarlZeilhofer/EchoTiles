@@ -181,8 +181,7 @@ class AppLocalizationsEn extends AppLocalizations {
       'Identified by the circle head and straight line.';
 
   @override
-  String get holdTilesPoint1 =>
-      'Only notes lasting at least 1 second become hold tiles.';
+  String get holdTilesPoint1 => 'Hold tiles last between 1 and 4 seconds.';
 
   @override
   String get holdTilesPoint2 =>
@@ -190,7 +189,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get holdTilesPoint3 =>
-      'Hold until the tail reaches the line for the full bonus.';
+      'Release when the tail reaches the line. Holding too long ends the run.';
 
   @override
   String get avoidMistakesTitle => 'AVOID MISTAKES';
@@ -237,7 +236,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get analysisHint =>
-      'Analyze this song before playing. Results are saved on this device.';
+      'Press play. Missing or outdated analysis is prepared automatically.';
 
   @override
   String get analysisReady => 'Rhythm ready';
@@ -254,8 +253,24 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get rhythmDifficulty =>
-      'Later tiles move faster. Charts always require at most two thumbs.';
+      'Variant B adds musical subdivisions over the song. Each thumb stays on its half.';
 
   @override
   String get analyzeHoldsHint => 'Analyze again for vocals and fading sounds.';
+
+  @override
+  String get tileVariantTitle => 'TILE GENERATION';
+
+  @override
+  String get variantA => 'Variant A';
+
+  @override
+  String get variantB => 'Variant B';
+
+  @override
+  String get variantADescription => 'Previous note selection and acceleration.';
+
+  @override
+  String get variantBDescription =>
+      'Musical subdivisions, linear progression and two-thumb accents.';
 }

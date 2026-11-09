@@ -10,6 +10,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:echotiles/main.dart';
 import 'package:echotiles/models/game_models.dart';
 import 'package:echotiles/models/rhythm_timeline.dart';
+import 'package:echotiles/models/tile_variant.dart';
 import 'package:echotiles/models/app_theme.dart';
 import 'package:echotiles/l10n/app_localizations.dart';
 import 'package:echotiles/screens/game_screen.dart';
@@ -68,7 +69,7 @@ void main() {
       bpm: 120,
       notesCount: 9,
     );
-    final clicks = await service.analyze(song);
+    final clicks = await service.analyze(song, variant: TileVariant.a);
     expect(clicks.notes.length, inInclusiveRange(8, 10));
     expect(clicks.bpm, closeTo(120, 5));
     // Repeated identical tones must still populate every lane.
@@ -81,9 +82,12 @@ void main() {
       ),
       isTrue,
     );
-    expect((await service.load(song))!.notes.length, clicks.notes.length);
+    expect(
+      (await service.load(song, variant: TileVariant.a))!.notes.length,
+      clicks.notes.length,
+    );
     await service.remove(song);
-    expect(await service.load(song), isNull);
+    expect(await service.load(song, variant: TileVariant.a), isNull);
 
     // Play the whole synthetic track using the real native playback position.
     // This exercises clock sync and touch judgment after the lead-in, rather
@@ -155,12 +159,15 @@ void main() {
       data.setUint8(i, 0);
     }
     await wav.writeAsBytes(data.buffer.asUint8List());
-    await expectLater(service.analyze(song), throwsA(isA<PlatformException>()));
+    await expectLater(
+      service.analyze(song, variant: TileVariant.a),
+      throwsA(isA<PlatformException>()),
+    );
     await wav.delete();
 
     // The bundled MP3 exercises Android's compressed-audio decoder as well.
     final bundled = SongCatalog.defaultSongs.first;
-    final analysis = await service.analyze(bundled);
+    final analysis = await service.analyze(bundled, variant: TileVariant.a);
     expect(analysis.duration, greaterThan(30));
     expect(analysis.notes.length, greaterThan(30));
     expect(analysis.notes.map((n) => n.lane).toSet(), {0, 1, 2, 3});
@@ -181,7 +188,15 @@ void main() {
 
     await tester.pumpWidget(const EchoTilesApp());
     await tester.pumpAndSettle();
-    expect(find.text('Analyze now'), findsOneWidget);
+    expect(find.text('Analyze now'), findsNothing);
+    final readyTimeout = Stopwatch()..start();
+    while (find.textContaining('Rhythm ready').evaluate().isEmpty) {
+      await tester.pump();
+      if (readyTimeout.elapsed > const Duration(seconds: 15)) {
+        fail('Cached chart did not load');
+      }
+      await Future<void>.delayed(const Duration(milliseconds: 20));
+    }
     expect(find.textContaining('Rhythm ready'), findsOneWidget);
     await tester.tap(find.text(bundled.title));
     await tester.pumpAndSettle();

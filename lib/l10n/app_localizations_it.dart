@@ -182,8 +182,7 @@ class AppLocalizationsIt extends AppLocalizations {
       'Riconoscibili dalla testa circolare e dalla linea retta.';
 
   @override
-  String get holdTilesPoint1 =>
-      'Solo le note di almeno 1 secondo diventano tessere da tenere premute.';
+  String get holdTilesPoint1 => 'Le tessere lunghe durano da 1 a 4 secondi.';
 
   @override
   String get holdTilesPoint2 =>
@@ -191,7 +190,7 @@ class AppLocalizationsIt extends AppLocalizations {
 
   @override
   String get holdTilesPoint3 =>
-      'Tieni premuto finché la coda raggiunge la linea per il bonus completo.';
+      'Rilascia quando la coda raggiunge la linea. Tenere troppo a lungo termina la partita.';
 
   @override
   String get avoidMistakesTitle => 'EVITA GLI ERRORI';
@@ -238,7 +237,7 @@ class AppLocalizationsIt extends AppLocalizations {
 
   @override
   String get analysisHint =>
-      'Analizza il brano prima di giocare. Il risultato viene salvato sul dispositivo.';
+      'Premi Play. Le analisi mancanti o obsolete vengono preparate automaticamente.';
 
   @override
   String get analysisReady => 'Ritmo pronto';
@@ -256,9 +255,25 @@ class AppLocalizationsIt extends AppLocalizations {
 
   @override
   String get rhythmDifficulty =>
-      'Le tessere accelerano durante il brano. Bastano sempre al massimo due pollici.';
+      'La variante B aggiunge suddivisioni musicali. Ogni pollice resta nella sua metà.';
 
   @override
   String get analyzeHoldsHint =>
       'Analizza di nuovo per voci e suoni in dissolvenza.';
+
+  @override
+  String get tileVariantTitle => 'GENERAZIONE TESSERE';
+
+  @override
+  String get variantA => 'Variante A';
+
+  @override
+  String get variantB => 'Variante B';
+
+  @override
+  String get variantADescription => 'Selezione e accelerazione precedenti.';
+
+  @override
+  String get variantBDescription =>
+      'Suddivisioni musicali, progressione lineare e accenti per due pollici.';
 }

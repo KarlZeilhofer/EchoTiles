@@ -1,0 +1,1 @@
+enum TileVariant { a, b }

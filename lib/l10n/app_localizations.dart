@@ -425,7 +425,7 @@ abstract class AppLocalizations {
   /// No description provided for @holdTilesPoint1.
   ///
   /// In en, this message translates to:
-  /// **'Only notes lasting at least 1 second become hold tiles.'**
+  /// **'Hold tiles last between 1 and 4 seconds.'**
   String get holdTilesPoint1;
 
   /// No description provided for @holdTilesPoint2.
@@ -437,7 +437,7 @@ abstract class AppLocalizations {
   /// No description provided for @holdTilesPoint3.
   ///
   /// In en, this message translates to:
-  /// **'Hold until the tail reaches the line for the full bonus.'**
+  /// **'Release when the tail reaches the line. Holding too long ends the run.'**
   String get holdTilesPoint3;
 
   /// No description provided for @avoidMistakesTitle.
@@ -521,7 +521,7 @@ abstract class AppLocalizations {
   /// No description provided for @analysisHint.
   ///
   /// In en, this message translates to:
-  /// **'Analyze this song before playing. Results are saved on this device.'**
+  /// **'Press play. Missing or outdated analysis is prepared automatically.'**
   String get analysisHint;
 
   /// No description provided for @analysisReady.
@@ -551,7 +551,7 @@ abstract class AppLocalizations {
   /// No description provided for @rhythmDifficulty.
   ///
   /// In en, this message translates to:
-  /// **'Later tiles move faster. Charts always require at most two thumbs.'**
+  /// **'Variant B adds musical subdivisions over the song. Each thumb stays on its half.'**
   String get rhythmDifficulty;
 
   /// No description provided for @analyzeHoldsHint.
@@ -559,6 +559,36 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Analyze again for vocals and fading sounds.'**
   String get analyzeHoldsHint;
+
+  /// No description provided for @tileVariantTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'TILE GENERATION'**
+  String get tileVariantTitle;
+
+  /// No description provided for @variantA.
+  ///
+  /// In en, this message translates to:
+  /// **'Variant A'**
+  String get variantA;
+
+  /// No description provided for @variantB.
+  ///
+  /// In en, this message translates to:
+  /// **'Variant B'**
+  String get variantB;
+
+  /// No description provided for @variantADescription.
+  ///
+  /// In en, this message translates to:
+  /// **'Previous note selection and acceleration.'**
+  String get variantADescription;
+
+  /// No description provided for @variantBDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'Musical subdivisions, linear progression and two-thumb accents.'**
+  String get variantBDescription;
 }
 
 class _AppLocalizationsDelegate

@@ -110,6 +110,7 @@ class _GameScreenState extends State<GameScreen>
       first.endTime,
       0,
       widget.analysis.duration,
+      variant: widget.analysis.variant,
     );
     _tiles.add(
       GameTile(
@@ -160,7 +161,12 @@ class _GameScreenState extends State<GameScreen>
     _songProgress = (time / analysis.duration).clamp(0.0, 1.0);
     while (_nextTileIndex < analysis.notes.length) {
       final note = analysis.notes[_nextTileIndex];
-      final y = RhythmTimeline.position(note.time, time, analysis.duration);
+      final y = RhythmTimeline.position(
+        note.time,
+        time,
+        analysis.duration,
+        variant: analysis.variant,
+      );
       if (y < -0.25) break;
       _tiles.add(
         GameTile(
@@ -177,11 +183,17 @@ class _GameScreenState extends State<GameScreen>
       final note = analysis.notes[tile.noteIndex];
       tile.y = tile.id == 0 && tile.isHolding && time < note.time
           ? _targetLineFactor
-          : RhythmTimeline.position(note.time, time, analysis.duration);
+          : RhythmTimeline.position(
+              note.time,
+              time,
+              analysis.duration,
+              variant: analysis.variant,
+            );
       tile.endY = RhythmTimeline.position(
         note.endTime,
         time,
         analysis.duration,
+        variant: analysis.variant,
       );
       if (tile.isLong) {
         tile.length = max(1.0, (tile.y - tile.endY) / _tileHeightFactor);

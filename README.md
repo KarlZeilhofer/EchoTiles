@@ -2,120 +2,103 @@
 
 Android rhythm-analysis fork of [Sidhant’s EchoTiles](https://github.com/sidhant947/EchoTiles).
 
-## Try it
+## Try version 1.4.0
 
-Download the APK at **https://alpenchat.at/downloads/**. Install **Echo Tiles Rhythm**
-next to the F-Droid original; it has a separate application ID
-(`at.zeilhofer.echotiles.rhythm`). Add a local song, press **Analyze now**, wait for
-analysis, then press play and tap START. The START tap hits the first real tile
-and starts the music; there is no separate duplicate tile or countdown.
-Re-analysis is available through the same button. Analysis can be cancelled.
+Download the APK at **https://alpenchat.at/downloads/** and install over the
+existing test app. It has a separate application ID
+(`at.zeilhofer.echotiles.rhythm`) from F-Droid. Add a song and press play.
+Missing or outdated analysis starts automatically with a cancellable progress
+bar. The START tap plays the first real tile and starts the music.
 
-## What changed
+Settings → Tile generation selects **Variant A** or **Variant B**. B is the
+default for this update. A keeps the previous selection and acceleration;
+both variants keep sliders between 1 and 4 seconds and use separate screen
+halves for the two thumbs.
 
-- Offline Android MediaExtractor/MediaCodec decoding on a worker thread, with
-  progress and cancellation. MP3, AAC, FLAC, WAV and other device-supported
-  formats use the system decoder; unsupported/corrupt/silent files show errors.
-- Streaming 22.05 kHz mono analysis, 1024-sample Hann FFT, positive log spectral
-  flux, adaptive local threshold and peak picking. No whole-song PCM buffer.
-- Tiles follow actual detected onsets. Spectral brightness suggests a lane,
-  with all four lanes used over the song. Since 1.3.1, the left thumb owns lanes
-  0/1 and the right thumb owns lanes 2/3. A hold reserves its entire half plus
-  a 100 ms release margin, so no chart requires crossing thumbs or holding
-  one lane while tapping its neighbor with the same thumb. At most two tiles require a thumb at any
-  instant, including holds plus taps. Extra accents are omitted while both
-  thumbs are occupied; measured vocal/fade durations are preserved rather than
-  repeatedly shortened into ordinary taps. Runtime input also limits holds to two.
-  Version 1.1.1 also applies the lane balancing to
-  existing saved charts automatically; **no re-analysis is required**.
-  Retained notes keep their musical onset times and progressive scroll speed;
-  this is onset detection, **not polyphonic pitch transcription**. Tempo is an
-  approximate estimate and does not quantize or replace the detected timestamps.
-- Progressive difficulty: onset spacing decreases from 380 ms near the beginning
-  to 140 ms at the end. Visual scrolling rises smoothly from 0.5 to 1.25 screen
-  heights/second (2.5×). Notes still arrive at the judgment line on their detected
-  audio timestamps; the audio itself is not sped up. Sparse passages stay sparse.
-- Version 1.3.0 follows quiet vocals and fading sounds using compact log-band
-  spectral profiles, adaptive timbre tracking and relative decay thresholds.
-  Changing dominant harmonics/vibrato no longer immediately cuts a held vocal.
-  Steady broadband noise and actual silence do not become sliders. Measured
-  sustains of at least **1 second** become holds; shorter notes remain taps.
-  This is a heuristic for mixed music, not polyphonic source separation.
-  Re-run **Analyze now** once for the new detector (v3 charts). Existing v1/v2
-  charts remain playable and receive the two-thumb planning automatically.
-  Hold until the tail reaches the line, then release for the full bonus.
-- Version 1.3.1 restores the original live hold rewards: 220 points per held
-  second, a combo increment at each 10% progress step, and 150 points plus two
-  combo increments at completion. Fractional points carry between frames to
-  avoid refresh-rate-dependent scoring. Pause and early release stop earning
-  hold points; holding longer visibly increases the score before completion.
-  Hand assignment also applies to saved charts without re-analysis.
-- Version 1.3.2 requires releasing held sliders no later than **100 ms after
-  their musical end**. Overholding loses the round, including on the last note
-  after audio playback completes. The pointer stays attached until release;
-  reaching the tail alone no longer completes a hold or awards its bonus.
-  Live points stop at the musical end and the completion bonus is awarded on
-  timely release. Deadlines use the paused game clock and are checked both on
-  frames and input events, so a late up/move/cancel cannot bypass a stalled
-  frame. Earlier release retains the original partial-reward behavior.
-- The START tile is the first real analyzed note. Its tap is scored immediately
-  and is never discarded while audio prepares. Zero-time first notes and a
-  first held note are covered by device tests without a second START tap.
-- **Version 1.2.1 restores the original F-Droid 1.0.0 spatial hit test** from
-  [upstream commit 6829d30](https://github.com/sidhant947/EchoTiles/blob/6829d30c6975e9ac213cb62f7e7e02c63b4dd1bb/lib/screens/game_screen.dart):
-  bottom-anchored rectangles, 0.08 screen-height direct-tap padding, 0.18
-  target-line tolerance, lowest candidate first, geometric rating thresholds
-  0.05/0.11, and missed-tile boundary at y > 1.02. Painting and input share
-  identical bounds. There is no independent millisecond hit gate, timestamp
-  correction, cross-lane tolerance or premature beat-based miss timeout.
-  The judgment line remains at 55% from the top (45% from the bottom).
-- Versioned JSON charts are saved in app-private files and reused after restart.
-  Local file size/modification time is checked when loading from disk. Analyze
-  again if a content-URI recording has been replaced. Songs longer than one hour
-  are rejected to bound analysis resources.
-- A monotonic playback clock eases audio drift at at most ±10% rather than
-  snapping on each sample; position queries run at 10 Hz instead of each vsync.
-  Tiles repaint at vsync without rebuilding the widget tree. The opaque HUD
-  updates at 10 Hz and no longer blurs the moving background.
-- Pause/background transitions freeze the game clock. Muting still advances
-  playback. Device tests complete tap/hold tracks and exercise overlapping two-thumb
-  holds plus immediate startup at audio time zero.
+## Audio analysis and variants
+
+Android MediaExtractor/MediaCodec decodes MP3, AAC, FLAC, WAV and other
+system-supported formats on a worker thread. Streaming mono 22.05 kHz audio,
+a 1024-sample Hann FFT, positive log spectral flux, adaptive thresholds and
+peak picking produce actual onset candidates. Compact spectral profiles track
+quiet vocals and audible decay. This is a mixed-music heuristic, not source
+separation or polyphonic pitch transcription. Silence does not invent notes.
+
+Analysis schema **v4** saves onset evidence, salience, duration and two-band
+attack flags independently of either chart. Older schemas are rejected by the
+app cache and re-analysed automatically on play. Changing A/B reuses the same
+evidence without decoding again. Planning runs in a Dart isolate. Source
+path and local file size/modification time must still match the cache. If a
+content-URI recording is replaced, remove/re-add it to invalidate its analysis.
+Engine/schema changes must bump `SongAnalysis.version` to invalidate old data.
+
+- **A:** keeps the prior onset-spacing gate, 380 → 140 ms over the song, and
+  the prior scroll curve `0.5 * (1 + 1.5 * progress^2.5)` screen heights/second.
+- **B:** locally fits tempo and phase in 10-second sections and prefers whole,
+  half and quarter bars before finer/off-grid accents. Four beats per bar is
+  a ranking assumption, not automatic time-signature transcription. The grid
+  ranks measured onsets; timestamps are never snapped or fabricated.
+- B’s target tile rate starts at approximately one per four beats and rises
+  linearly to 2.5×. Each 10-second budget integrates this rate, carrying only
+  fractional rounding. Quiet passages or occupied thumbs may stay below the
+  target; missed quotas do not accumulate and flood the next passage.
+- B allows extra accents beside a held note on the free thumb. Strong attacks
+  with independent low and high spectral energy can produce two simultaneous
+  taps, one per hand, within the same tile budget. The first START stays single.
+- B’s visual speed rises linearly from 0.5 to 1.25 screen heights/second.
+  Positions use the integral of that speed, so every head and tail moves the
+  same distance per frame and crosses the line at its measured audio time.
+
+## Input, sliders and rendering
+
+The left thumb owns lanes 0/1, the right thumb lanes 2/3. A hold reserves its
+whole half and a 100 ms release margin. No chart needs a third thumb or crossing
+thumbs. Lane balancing uses all four lanes. Sustains below 1 second are taps;
+longer sustains become sliders capped at **4 seconds**, including cached data.
+
+Held sliders earn 220 points/second and combo increments at 10% steps.
+Release at the tail for 150 completion points and two combo increments. Holding
+more than **100 ms past the musical end loses**, including the final note after
+audio ends. Points stop at the musical end; release is required for the bonus.
+Pause freezes the deadline. Late up/move/cancel events cannot bypass it between
+frames. Earlier release retains the original partial-reward behavior.
+
+Ordinary taps retain the F-Droid 1.0.0 spatial hit rules from
+[upstream 6829d30](https://github.com/sidhant947/EchoTiles/blob/6829d30c6975e9ac213cb62f7e7e02c63b4dd1bb/lib/screens/game_screen.dart):
+bottom-anchored rectangles, 0.08 screen-height direct-tap padding, 0.18 target-line
+tolerance, lowest candidate first, rating thresholds 0.05/0.11, missed boundary
+y > 1.02. Painting and input share bounds. The judgment line is 45% from the
+bottom. No millisecond hit gate is applied to ordinary taps.
+
+A monotonic clock slews audio drift at at most ±10%; native position polling
+runs at 10 Hz, tiles repaint at vsync, and the HUD updates at 10 Hz. Pause and
+backgrounding freeze playback; muting still advances the music.
 
 ## Build and verify
 
-Flutter **3.47.9** / Dart **3.13.7**, Java **21**, Android SDK 36 and NDK
-28.2.13676358. Flutter/Gradle download missing Android components as needed.
+Flutter 3.47.9 / Dart 3.13.7, Java 21, Android SDK 36, NDK 28.2.13676358.
 
 ```sh
 flutter pub get
 flutter analyze
 flutter test
-flutter build apk --release
 cd android && ./gradlew :app:testDebugUnitTest
-```
-
-With an Android emulator/device connected:
-
-```sh
+cd ..
 flutter test integration_test -d emulator-5554
+flutter build apk --release
 ```
 
-The native tests check synthetic beat alignment, tempo, silence, edge notes,
-progressive density, measured sustain lengths, pitch changes and noise rejection.
-Device tests decode WAV/MP3, complete both a tap track and a hold track, verify
-pause while holding, tap on still-visible tiles after the former timing window,
-and verify live hold rewards, frozen scoring during pause/after release, exact
-completion rewards on release, failure on overholding, late input during a
-frame stall, and the final slider at actual audio completion. Early slider
-release still allows the song to finish.
+Tests cover detection, musical timing, 10-second density budgets, simultaneous
+accents, free-thumb subdivisions, 4-second caps, original tap geometry, live
+scoring, pause, release deadlines, actual audio completion, automatic analysis
+upgrades, and sharing a cache between A/B. Device tests decode WAV and MP3.
 
 Release signing uses `android/key.properties` when supplied; otherwise this
-experimental fork uses the local Android debug key. Never replace the original
-F-Droid app with this build. The `tools/rhythm-test-workflow.yml` template builds this fork and uploads a
-test artifact without upstream signing secrets. It can be installed into
-`.github/workflows` with a GitHub credential that has workflow permission.
-The `web-downloads/index.html` template is deployed alongside the APK and a
-SHA256SUMS file to the existing Alpenchat web root.
+experimental fork uses the local Android debug key. The
+`tools/rhythm-test-workflow.yml` template builds without upstream signing
+secrets. Installing it into `.github/workflows` requires workflow permission.
+The `web-downloads/index.html` template is published alongside the APK and
+SHA256SUMS in the existing Alpenchat web root.
 
 ---
 

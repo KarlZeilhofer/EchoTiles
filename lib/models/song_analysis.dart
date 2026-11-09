@@ -1,51 +1,47 @@
-class AnalyzedNote {
-  final double time;
-  final int lane;
-  final double duration;
-  const AnalyzedNote(this.time, this.lane, {this.duration = 0});
-  static const minimumHoldDuration = 1.0;
-  static const holdReleaseTolerance = 0.10;
-  bool get isLong => duration >= minimumHoldDuration;
-  double get endTime => time + duration;
-  bool isReleaseLate(double time) => time > endTime + holdReleaseTolerance;
+import 'analyzed_note.dart';
+import 'onset_candidate.dart';
+import 'rhythm_chart_planner.dart';
+import 'tile_variant.dart';
 
-  Map<String, Object> toJson() => {
-    'time': time,
-    'lane': lane,
-    'duration': duration,
-  };
-  factory AnalyzedNote.fromJson(Map<String, dynamic> json) => AnalyzedNote(
-    (json['time'] as num).toDouble(),
-    (json['lane'] as num).toInt(),
-    duration: (json['duration'] as num?)?.toDouble() ?? 0,
-  );
-}
+export 'analyzed_note.dart';
 
 class SongAnalysis {
-  static const version = 3;
+  static const version = 4;
   static const maxSimultaneousTiles = 2;
   static const thumbReleaseGap = 0.10;
   final double duration;
   final double bpm;
   final int analysisVersion;
   final List<AnalyzedNote> notes;
+  final TileVariant variant;
+  final List<OnsetCandidate>? candidates;
+  final List<AnalyzedNote>? sourceNotes;
   const SongAnalysis({
     required this.duration,
     required this.bpm,
     required this.notes,
     this.analysisVersion = version,
+    this.variant = TileVariant.a,
+    this.candidates,
+    this.sourceNotes,
   });
 
   Map<String, Object> toJson() => {
     'version': analysisVersion,
     'duration': duration,
     'bpm': bpm,
-    'notes': notes.map((n) => n.toJson()).toList(),
+    'notes': (sourceNotes ?? notes).map((n) => n.toJson()).toList(),
+    if (candidates != null)
+      'candidates': candidates!.map((c) => c.toJson()).toList(),
   };
 
-  factory SongAnalysis.fromJson(Map<String, dynamic> json) {
+  factory SongAnalysis.fromJson(
+    Map<String, dynamic> json, {
+    TileVariant variant = TileVariant.a,
+  }) {
     if (json['version'] != 1 &&
         json['version'] != 2 &&
+        json['version'] != 3 &&
         json['version'] != version) {
       throw const FormatException('Old analysis');
     }
@@ -77,11 +73,54 @@ class SongAnalysis {
         throw const FormatException('Unsorted analysis');
       }
     }
+    AnalyzedNote capped(AnalyzedNote n) => AnalyzedNote(
+      n.time,
+      n.lane,
+      duration: n.duration > AnalyzedNote.maximumHoldDuration
+          ? AnalyzedNote.maximumHoldDuration
+          : n.duration,
+    );
+    final source = notes.map(capped).toList();
+    final candidates = (json['candidates'] as List?)
+        ?.map(
+          (c) => OnsetCandidate.fromJson(Map<String, dynamic>.from(c as Map)),
+        )
+        .toList();
+    if (candidates != null) {
+      if (candidates.isEmpty) throw const FormatException('Empty candidates');
+      for (var i = 0; i < candidates.length; i++) {
+        final c = candidates[i];
+        final n = c.note;
+        if (!c.strength.isFinite ||
+            c.strength <= 0 ||
+            !n.time.isFinite ||
+            n.time < 0 ||
+            n.time > duration ||
+            !n.duration.isFinite ||
+            n.duration < 0 ||
+            n.endTime > duration + 0.001 ||
+            n.lane < 0 ||
+            n.lane > 3 ||
+            (i > 0 && n.time <= candidates[i - 1].note.time)) {
+          throw const FormatException('Invalid onset candidates');
+        }
+        candidates[i] = OnsetCandidate(
+          capped(n),
+          strength: c.strength,
+          doubleAccent: c.doubleAccent,
+        );
+      }
+    }
     return SongAnalysis(
       duration: duration,
       bpm: bpm,
-      notes: _distributeLanes(notes),
+      notes: variant == TileVariant.b && candidates != null
+          ? RhythmChartPlanner.plan(candidates, bpm, duration)
+          : _distributeLanes(source),
       analysisVersion: json['version'] as int,
+      variant: variant,
+      candidates: candidates,
+      sourceNotes: candidates == null ? null : source,
     );
   }
 

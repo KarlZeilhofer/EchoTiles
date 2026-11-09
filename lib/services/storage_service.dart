@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/game_models.dart';
+import '../models/tile_variant.dart';
 
 class StorageService {
   static const String keyTheme = 'theme_id';
@@ -9,12 +10,19 @@ class StorageService {
   static const String keyBestCombo = 'best_combo';
   static const String keyCustomSongs = 'custom_songs';
   static const String keyLocale = 'locale_code';
+  static const String keyTileVariant = 'tile_variant';
 
   static late SharedPreferences _prefs;
 
   static Future<void> init() async {
     _prefs = await SharedPreferences.getInstance();
   }
+
+  static TileVariant getTileVariant() =>
+      _prefs.getString(keyTileVariant) == 'a' ? TileVariant.a : TileVariant.b;
+
+  static Future<void> setTileVariant(TileVariant variant) =>
+      _prefs.setString(keyTileVariant, variant.name);
 
   static String getThemeId() {
     return _prefs.getString(keyTheme) ?? 'amoled';

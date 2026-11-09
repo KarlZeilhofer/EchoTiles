@@ -115,19 +115,29 @@ class RhythmDetector {
             val minimumGap = 0.38 - 0.24 * progress
             if (selected.isEmpty() || peak.time - selected.last().time >= minimumGap) selected.add(peak)
         }
-        var previousToneEnd = 0.0
-        val notes = selected.map { f ->
-            val lane = if (pitches.last() - pitches.first() < 20) 1 else
-                (1..3).count { f.pitch > pitches[min(pitches.lastIndex, pitches.size * it / 4)] }
-            val index = frames.binarySearchBy(f.time) { it.time }.coerceAtLeast(0)
-            val duplicate = f.time < previousToneEnd && similarity(
-                frames[max(0, index - 3)].profile,
-                frames[min(frames.lastIndex, index + 3)].profile) >= 0.65
-            val hold = if (duplicate) 0.0 else estimateSustain(index, duration)
-            if (hold > 0) previousToneEnd = f.time + hold
-            mapOf("time" to f.time, "lane" to lane, "duration" to hold)
+        fun describe(source: List<Frame>): List<Map<String, Any>> {
+            var previousToneEnd = 0.0
+            return source.map { f ->
+                val lane = if (pitches.last() - pitches.first() < 20) 1 else
+                    (1..3).count { f.pitch > pitches[min(pitches.lastIndex, pitches.size * it / 4)] }
+                val index = frames.binarySearchBy(f.time) { it.time }.coerceAtLeast(0)
+                val duplicate = f.time < previousToneEnd && similarity(
+                    frames[max(0, index - 3)].profile,
+                    frames[min(frames.lastIndex, index + 3)].profile) >= 0.65
+                val hold = if (duplicate) 0.0 else estimateSustain(index, duration)
+                if (hold > 0) previousToneEnd = f.time + hold
+                val prior = frames[max(0, index - 3)].profile
+                val low = f.profile.take(13).sum()
+                val high = f.profile.drop(24).sum()
+                val weight = f.profile.sum()
+                val doubleAccent = hold < 1.0 && min(low, high) > weight * 0.15 &&
+                    low > prior.take(13).sum() * 1.5 && high > prior.drop(24).sum() * 1.5
+                mapOf("time" to f.time, "lane" to lane, "duration" to min(4.0, hold),
+                    "strength" to f.flux, "doubleAccent" to doubleAccent)
+            }
         }
-        return mapOf("version" to 3, "duration" to duration, "bpm" to bpm, "notes" to notes)
+        return mapOf("version" to 4, "duration" to duration, "bpm" to bpm,
+            "notes" to describe(selected), "candidates" to describe(peaks))
     }
 
     /** Track the spectral shape rather than a single loudest FFT bin. This

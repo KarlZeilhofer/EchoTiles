@@ -6,6 +6,7 @@ import 'package:echotiles/l10n/app_localizations.dart';
 import 'package:echotiles/models/app_theme.dart';
 import 'package:echotiles/models/game_models.dart';
 import 'package:echotiles/models/rhythm_timeline.dart';
+import 'package:echotiles/models/tile_variant.dart';
 import 'package:echotiles/screens/game_screen.dart';
 import 'package:echotiles/services/analysis_service.dart';
 import 'package:echotiles/services/audio_service.dart';
@@ -75,7 +76,10 @@ void main() {
       bpm: 120,
       notesCount: 3,
     );
-    final analysis = await AnalysisService.instance.analyze(song);
+    final analysis = await AnalysisService.instance.analyze(
+      song,
+      variant: TileVariant.a,
+    );
     final holds = analysis.notes.where((n) => n.isLong).toList();
     expect(holds.length, 1);
     expect(holds[0].duration, closeTo(1.3, 0.1));

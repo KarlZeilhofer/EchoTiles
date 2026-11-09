@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../l10n/app_localizations.dart';
 import '../models/app_theme.dart';
+import '../models/tile_variant.dart';
 import '../services/haptics.dart';
 import '../services/storage_service.dart';
 
@@ -8,12 +9,14 @@ class SettingsScreen extends StatefulWidget {
   final AppThemeData appTheme;
   final ValueChanged<AppThemeId> onThemeChanged;
   final ValueChanged<Locale?> onLocaleChanged;
+  final ValueChanged<TileVariant>? onVariantChanged;
 
   const SettingsScreen({
     super.key,
     required this.appTheme,
     required this.onThemeChanged,
     required this.onLocaleChanged,
+    this.onVariantChanged,
   });
 
   @override
@@ -24,6 +27,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   late bool _hapticEnabled;
   late AppThemeData _theme;
   late String? _localeCode;
+  late TileVariant _variant;
 
   @override
   void initState() {
@@ -31,6 +35,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     _hapticEnabled = StorageService.getHapticEnabled();
     _theme = widget.appTheme;
     _localeCode = StorageService.getLocaleCode();
+    _variant = StorageService.getTileVariant();
   }
 
   @override
@@ -81,6 +86,59 @@ class _SettingsScreenState extends State<SettingsScreen> {
         child: ListView(
           padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
           children: [
+            Text(
+              l10n.tileVariantTitle,
+              style: TextStyle(
+                color: theme.textMuted,
+                fontWeight: FontWeight.w900,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Material(
+              color: theme.cardBg,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(20),
+                side: BorderSide(color: theme.border, width: 1.8),
+              ),
+              clipBehavior: Clip.antiAlias,
+              child: Column(
+                children: [
+                  for (final variant in TileVariant.values)
+                    ListTile(
+                      key: ValueKey('variant-${variant.name}'),
+                      title: Text(
+                        variant == TileVariant.a
+                            ? l10n.variantA
+                            : l10n.variantB,
+                        style: TextStyle(
+                          color: theme.textPrimary,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                      subtitle: Text(
+                        variant == TileVariant.a
+                            ? l10n.variantADescription
+                            : l10n.variantBDescription,
+                        style: TextStyle(color: theme.textMuted),
+                      ),
+                      trailing: _variant == variant
+                          ? Icon(
+                              Icons.check_circle_rounded,
+                              color: theme.switchActiveColor,
+                            )
+                          : null,
+                      onTap: () async {
+                        Haptics.select();
+                        await StorageService.setTileVariant(variant);
+                        if (!mounted) return;
+                        setState(() => _variant = variant);
+                        widget.onVariantChanged?.call(variant);
+                      },
+                    ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 28),
             Padding(
               padding: const EdgeInsets.only(left: 4, bottom: 8),
               child: Text(

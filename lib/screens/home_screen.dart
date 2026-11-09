@@ -7,6 +7,7 @@ import '../l10n/app_localizations.dart';
 import '../models/app_theme.dart';
 import '../models/game_models.dart';
 import '../models/song_analysis.dart';
+import '../models/tile_variant.dart';
 import '../services/analysis_service.dart';
 import '../services/audio_service.dart';
 import '../services/haptics.dart';
@@ -37,6 +38,8 @@ class _HomeScreenState extends State<HomeScreen> {
   List<SongItem> _songs = const [];
   final Map<String, SongAnalysis> _analyses = {};
   bool _busy = false;
+  bool _openingSong = false;
+  int _loadGeneration = 0;
 
   @override
   void initState() {
@@ -45,12 +48,14 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   void _loadData() {
+    final generation = ++_loadGeneration;
     setState(() {
       _songs = SongCatalog.getSongs();
+      _analyses.clear();
     });
     for (final song in _songs) {
       AnalysisService.instance.load(song).then((analysis) {
-        if (mounted && analysis != null) {
+        if (mounted && generation == _loadGeneration && analysis != null) {
           setState(() => _analyses[song.id] = analysis);
         }
       });
@@ -138,27 +143,29 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Future<void> _playSong(SongItem song) async {
-    if (_busy) return;
-    Haptics.select();
-    final analysis =
-        _analyses[song.id] ?? await AnalysisService.instance.load(song);
-    if (!mounted) return;
-    if (analysis == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(AppLocalizations.of(context).analysisHint)),
-      );
-      return;
-    }
-    await Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (_) => GameScreen(
-          song: song,
-          appTheme: widget.appTheme,
-          analysis: analysis,
+    if (_busy || _openingSong) return;
+    _openingSong = true;
+    try {
+      Haptics.select();
+      var analysis = await AnalysisService.instance.load(song);
+      if (!mounted) return;
+      if (analysis == null) {
+        analysis = await _analyzeSong(song);
+        if (!mounted || analysis == null) return;
+      }
+      await Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (_) => GameScreen(
+            song: song,
+            appTheme: widget.appTheme,
+            analysis: analysis!,
+          ),
         ),
-      ),
-    );
-    if (mounted) _loadData();
+      );
+      if (mounted) _loadData();
+    } finally {
+      _openingSong = false;
+    }
   }
 
   Future<void> _showAddSongDialog() async {
@@ -627,36 +634,13 @@ class _HomeScreenState extends State<HomeScreen> {
                                                 case final analysis?)
                                               Text(
                                                 '${AppLocalizations.of(context).analysisReady} · ${analysis.notes.length} tiles'
+                                                ' · ${analysis.variant == TileVariant.a ? AppLocalizations.of(context).variantA : AppLocalizations.of(context).variantB}'
                                                 '${analysis.bpm > 0 ? ' · ~${analysis.bpm.round()} BPM' : ''}',
                                                 style: TextStyle(
                                                   color: theme.playBg,
                                                   fontSize: 11,
                                                 ),
                                               ),
-                                            if (_analyses[song.id]
-                                                    ?.analysisVersion ==
-                                                1)
-                                              Text(
-                                                AppLocalizations.of(context)
-                                                    .analyzeHoldsHint,
-                                                style: TextStyle(
-                                                  color: theme.textMuted,
-                                                  fontSize: 11,
-                                                ),
-                                              ),
-                                            TextButton.icon(
-                                              onPressed: _busy
-                                                  ? null
-                                                  : () => _analyzeSong(song),
-                                              icon: const Icon(
-                                                Icons.graphic_eq,
-                                                size: 18,
-                                              ),
-                                              label: Text(
-                                                AppLocalizations.of(context)
-                                                    .analyzeNow,
-                                              ),
-                                            ),
                                             Row(
                                               children: [
                                                 Row(
@@ -750,6 +734,7 @@ class _HomeScreenState extends State<HomeScreen> {
               appTheme: widget.appTheme,
               onThemeChanged: widget.onThemeChanged,
               onLocaleChanged: widget.onLocaleChanged,
+              onVariantChanged: (TileVariant _) => _loadData(),
             ),
     );
   }

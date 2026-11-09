@@ -5,6 +5,36 @@ import org.junit.Test
 import kotlin.math.*
 
 class RhythmDetectorTest {
+    @Test fun sustainsAreNeverLongerThanFourSeconds() {
+        val detector = RhythmDetector()
+        repeat(RhythmDetector.RATE * 7) { i ->
+            val t = i.toDouble() / RhythmDetector.RATE
+            detector.add(if (t in 0.5..6.5) 0.1 * sin(2 * PI * 440 * t) else 0.0)
+        }
+        val result = detector.finish(7.0)
+        assertEquals(4, result["version"])
+        @Suppress("UNCHECKED_CAST")
+        val candidates = result["candidates"] as List<Map<String, Any>>
+        assertEquals(4.0, candidates.first()["duration"] as Double, 0.001)
+        assertTrue(candidates.all { it["duration"] as Double <= 4.0 })
+    }
+
+    @Test fun twoBandAttacksAreMarkedButSingleTonesAreNotDoubled() {
+        fun analyze(both: Boolean): List<Map<String, Any>> {
+            val detector = RhythmDetector()
+            repeat(RhythmDetector.RATE * 3) { i ->
+                val t = i.toDouble() / RhythmDetector.RATE
+                val p = (t - 0.5).mod(0.5)
+                val sample = if (t >= 0.5 && p < 0.06)
+                    0.3 * exp(-p * 40) * (sin(2 * PI * 110 * p) + if (both) sin(2 * PI * 1760 * p) else 0.0) else 0.0
+                detector.add(sample)
+            }
+            @Suppress("UNCHECKED_CAST")
+            return detector.finish(3.0)["candidates"] as List<Map<String, Any>>
+        }
+        assertTrue(analyze(true).any { it["doubleAccent"] == true })
+        assertTrue(analyze(false).none { it["doubleAccent"] == true })
+    }
     private fun pulses(duration: Double, spacing: Double, start: Double = 0.5): Map<String, Any> {
         val detector = RhythmDetector()
         for (i in 0 until (duration * RhythmDetector.RATE).toInt()) {
