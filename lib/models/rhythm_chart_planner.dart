@@ -3,16 +3,29 @@ import 'dart:math';
 import 'analyzed_note.dart';
 import 'onset_candidate.dart';
 
-/// Variant B selects measured onsets; the grid only ranks them, never moves
-/// them or fabricates notes in silence. Four beats/bar is a ranking assumption,
-/// not a claim to transcribe the recording's time signature.
+/// Variant B has song-independent ten-second quotas. Prefer measured attacks;
+/// complete missing slots with metrical notes rather than underfill the quota.
 class RhythmChartPlanner {
   static const windowSeconds = 10.0;
-  static const startSpeed = 0.5;
+  static const initialRate = 1.5;
   static const endFactor = 2.5;
 
-  static double density(double time, double duration, double baseRate) =>
-      baseRate * (1 + (endFactor - 1) * (time / duration).clamp(0.0, 1.0));
+  static double density(double time, double duration) {
+    final windows = (duration / windowSeconds).ceil();
+    final progress = windows <= 1
+        ? 0.0
+        : (time / windowSeconds).floor().clamp(0, windows - 1) / (windows - 1);
+    return initialRate * (1 + (endFactor - 1) * progress);
+  }
+
+  static int windowQuota(double start, double duration) {
+    if (start >= duration) return 0;
+    final quota =
+        ((min(duration, start + windowSeconds) - start) *
+                density(start, duration))
+            .round();
+    return start == 0 ? max(1, quota) : quota;
+  }
 
   static List<AnalyzedNote> plan(
     List<OnsetCandidate> input,
@@ -20,145 +33,131 @@ class RhythmChartPlanner {
     double duration,
   ) {
     if (input.isEmpty) return [];
-    // Start with roughly three attacks per four beats, rather than one per
-    // bar. Quiet sections elsewhere must not thin an otherwise active intro;
-    // each window already limits selection to its actual playable onsets.
-    final baseRate = bpm > 0 ? bpm / 80 : 1.5;
     final result = <AnalyzedNote>[];
     final busyUntil = [0.0, 0.0];
     final laneBag = <int>{};
-    var carry = 0.0;
+    var holdBusyUntil = 0.0;
     var cursor = 0;
-    _BeatGrid? grid;
+    _BeatGrid? previousGrid;
     for (var start = 0.0; start < duration; start += windowSeconds) {
       final end = min(duration, start + windowSeconds);
       final section = <OnsetCandidate>[];
-      while (cursor < input.length &&
-          input[cursor].note.time < end + (end == duration ? 1e-6 : 0)) {
+      while (cursor < input.length && input[cursor].note.time < end) {
         section.add(input[cursor++]);
       }
-      final expected =
-          (end - start) *
-          (density(start, duration, baseRate) +
-              density(end, duration, baseRate)) /
-          2;
-      final quota = (expected + carry).round();
-      carry +=
-          expected -
-          quota; // Do not carry a quiet passage's missing notes forward.
-      if (section.isEmpty) continue;
-      grid = _BeatGrid.fit(section, bpm, grid);
-      final chosen = <OnsetCandidate>[];
-      // Only the last four seconds can still occupy a hand in this window.
-      final occupied = result.where((n) => _end(n) > start).toList();
-      final options = <_Option>[];
-      final strengths = section.map((c) => c.strength).toList()..sort();
-      final median = max(1e-9, strengths[strengths.length ~/ 2]);
-      for (final candidate in section) {
-        final rank = grid.rank(candidate.note.time);
-        final priority = identical(candidate, input.first)
-            ? -1.0
-            : candidate.note.isLong
-            ? min(rank.toDouble(), 1.5)
-            : rank.toDouble();
-        options.add(_Option(candidate, priority));
-        if (!identical(candidate, input.first) &&
-            candidate.doubleAccent &&
-            !candidate.note.isLong &&
-            rank <= 1 &&
-            candidate.strength >= median * 1.25) {
-          options.add(_Option(candidate, 1.75, extra: true));
+      final grid = section.isNotEmpty
+          ? _BeatGrid.fit(section, bpm, previousGrid)
+          : previousGrid ??
+                _BeatGrid(bpm > 0 ? 60 / bpm : 0.5, input.first.note.time, 0);
+      previousGrid = grid;
+      final quota = windowQuota(start, duration);
+      if (quota == 0) continue;
+      final width = (end - start) / quota;
+      // A fine, beat-aligned fallback always fits the paced slots, including
+      // at slow tempos. Coarser beats are preferred within each slot.
+      final subdivisions = pow(
+        2,
+        max(0, (log(grid.period / min(0.08, width / 3)) / ln2).ceil()),
+      );
+      final step = grid.period / subdivisions;
+      final used = <OnsetCandidate>{};
+      for (var slot = 0; slot < quota; slot++) {
+        final lower = start + slot * width;
+        // Reserve the hand transition into the next window, even if the song
+        // has only a very short fractional final window.
+        final upper = min(
+          start + (slot + 1) * width,
+          end < duration ? end - min(0.11, (end - start) * 0.1) : end,
+        );
+        final center = (lower + upper) / 2;
+        List<int> hands(double t) => [
+          for (var h = 0; h < 2; h++)
+            if (busyUntil[h] <= t + 1e-8) h,
+        ];
+        final audible = section
+            .where(
+              (c) =>
+                  !used.contains(c) &&
+                  c.note.time >= lower &&
+                  c.note.time < upper &&
+                  hands(c.note.time).isNotEmpty,
+            )
+            .toList();
+        double cost(OnsetCandidate c) =>
+            (c.note.time - center).abs() / width +
+            grid.rank(c.note.time) * 0.06 -
+            log(1 + c.strength) * 0.015;
+        final candidate = result.isEmpty && audible.contains(input.first)
+            ? input.first
+            : audible.isEmpty
+            ? null
+            : audible.reduce((a, b) => cost(a) <= cost(b) ? a : b);
+        late double time;
+        if (candidate != null) {
+          used.add(candidate);
+          time = candidate.note.time;
+        } else {
+          final first = ((lower - grid.origin) / step).ceil();
+          final last = ((upper - grid.origin) / step).ceil() - 1;
+          final times =
+              [for (var i = first; i <= last; i++) grid.origin + i * step]
+                  .where((t) => t >= lower && t < upper && hands(t).isNotEmpty)
+                  .toList();
+          double gridCost(double t) =>
+              (t - center).abs() / width + grid.rank(t) * 0.07;
+          if (times.isEmpty) {
+            throw StateError('No playable metrical slot at $lower');
+          }
+          time = times.reduce((a, b) => gridCost(a) <= gridCost(b) ? a : b);
         }
-      }
-      final target = max(1, quota);
-      final picked = <_Option>[];
-      while (options.isNotEmpty && picked.length < target) {
-        final priority = options.map((o) => o.priority).reduce(min);
-        final tier = options.where((o) => o.priority == priority).toList();
-        double value(_Option option) {
-          final peers = picked.where((p) => p.priority == priority);
-          final spacing = peers.isEmpty
-              ? 1.0
-              : min(
-                  1.0,
-                  peers
-                      .map(
-                        (p) =>
-                            (p.candidate.note.time - option.candidate.note.time)
-                                .abs() /
-                            2,
-                      )
-                      .reduce(min),
-                );
-          final salience =
-              sqrt(option.candidate.strength / median).clamp(0.0, 3.0) / 3;
-          return salience + spacing * 0.7;
+        var length = min(
+          AnalyzedNote.maximumHoldDuration,
+          candidate?.note.duration ?? 0.0,
+        );
+        // A second overlapping sustain becomes a tap: one thumb must remain
+        // available for the fixed pace, while the first vocal keeps its tail.
+        if (time < holdBusyUntil || length < AnalyzedNote.minimumHoldDuration) {
+          length = 0;
+        }
+        final preferred = candidate?.note.lane ?? slot % 4;
+        int add(double length) {
+          if (laneBag.isEmpty) laneBag.addAll([0, 1, 2, 3]);
+          final free = [
+            for (final h in hands(time)) h * 2,
+            for (final h in hands(time)) h * 2 + 1,
+          ];
+          var lanes = free.where(laneBag.contains).toList();
+          if (lanes.isEmpty) lanes = free;
+          final lane = lanes.reduce(
+            (a, b) => (a - preferred).abs() <= (b - preferred).abs() ? a : b,
+          );
+          final note = AnalyzedNote(time, lane, duration: length);
+          result.add(note);
+          busyUntil[lane ~/ 2] =
+              (note.isLong ? note.endTime : note.time) +
+              AnalyzedNote.holdReleaseTolerance;
+          if (note.isLong) holdBusyUntil = busyUntil[lane ~/ 2];
+          laneBag.remove(lane);
+          return lane;
         }
 
-        final option = tier.reduce((a, b) => value(a) >= value(b) ? a : b);
-        options.remove(option);
-        if (option.extra && !chosen.contains(option.candidate)) continue;
-        final note = option.candidate.note;
-        if (!_fits(note, occupied)) continue;
-        chosen.add(option.candidate);
-        occupied.add(note);
-        picked.add(option);
-      }
-      chosen.sort((a, b) => a.note.time.compareTo(b.note.time));
-      for (final candidate in chosen) {
-        final note = candidate.note;
-        final hands = [
-          for (var h = 0; h < 2; h++)
-            if (busyUntil[h] <= note.time + 1e-6) h,
-        ];
-        if (hands.isEmpty) continue;
-        if (laneBag.isEmpty) laneBag.addAll([0, 1, 2, 3]);
-        final free = [
-          for (final h in hands) h * 2,
-          for (final h in hands) h * 2 + 1,
-        ];
-        var lanes = free.where(laneBag.contains).toList();
-        if (lanes.isEmpty) lanes = free;
-        final lane = lanes.reduce(
-          (a, b) => (a - note.lane).abs() <= (b - note.lane).abs() ? a : b,
-        );
-        result.add(AnalyzedNote(note.time, lane, duration: note.duration));
-        busyUntil[lane ~/ 2] = _end(note);
-        laneBag.remove(lane);
+        add(length);
+        // A strong measured chord may consume two adjacent slots, one per
+        // hand. START remains single and ordinary fallback beats stay single.
+        if (candidate?.doubleAccent == true &&
+            length == 0 &&
+            slot > 0 &&
+            slot + 1 < quota &&
+            width < 0.5 &&
+            time > lower + width * 0.45 &&
+            hands(time).isNotEmpty) {
+          add(0);
+          slot++;
+        }
       }
     }
     return result;
   }
-
-  static double _end(AnalyzedNote note) =>
-      (note.isLong ? note.endTime : note.time) +
-      AnalyzedNote.holdReleaseTolerance;
-
-  static bool _fits(AnalyzedNote note, List<AnalyzedNote> selected) {
-    final end = _end(note);
-    final overlap = selected
-        .where((n) => n.time < end - 1e-6 && _end(n) > note.time + 1e-6)
-        .toList();
-    for (final time in [
-      note.time,
-      ...overlap.map((n) => n.time).where((t) => t >= note.time),
-    ]) {
-      if (overlap
-              .where((n) => n.time <= time + 1e-6 && _end(n) > time + 1e-6)
-              .length >=
-          2) {
-        return false;
-      }
-    }
-    return true;
-  }
-}
-
-class _Option {
-  final OnsetCandidate candidate;
-  final double priority;
-  final bool extra;
-  _Option(this.candidate, this.priority, {this.extra = false});
 }
 
 class _BeatGrid {

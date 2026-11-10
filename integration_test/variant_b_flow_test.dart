@@ -5,6 +5,7 @@ import 'package:echotiles/l10n/app_localizations.dart';
 import 'package:echotiles/main.dart';
 import 'package:echotiles/models/app_theme.dart';
 import 'package:echotiles/models/rhythm_timeline.dart';
+import 'package:echotiles/models/rhythm_chart_planner.dart';
 import 'package:echotiles/models/song_analysis.dart';
 import 'package:echotiles/models/tile_variant.dart';
 import 'package:echotiles/screens/game_screen.dart';
@@ -12,6 +13,7 @@ import 'package:echotiles/services/analysis_service.dart';
 import 'package:echotiles/services/audio_service.dart';
 import 'package:echotiles/services/song_catalog.dart';
 import 'package:echotiles/services/storage_service.dart';
+import 'package:echotiles/widgets/score_gain_overlay.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
@@ -64,6 +66,12 @@ void main() {
       final b = tester.widget<GameScreen>(find.byType(GameScreen)).analysis;
       expect(b.variant, TileVariant.b);
       expect(b.notes.every((n) => n.duration <= 4), isTrue);
+      for (var start = 0.0; start < b.duration; start += 10) {
+        expect(
+          b.notes.where((n) => n.time >= start && n.time < start + 10).length,
+          RhythmChartPlanner.windowQuota(start, b.duration),
+        );
+      }
       final saved = await cache.readAsString();
       expect((jsonDecode(saved) as Map)['version'], SongAnalysis.version);
       expect(b.candidates, isNotEmpty);
@@ -148,11 +156,23 @@ void main() {
       await tester.tapAt(point(0));
       await waitAt(1);
       final left = await tester.startGesture(point(1), pointer: 80);
+      await tester.pump();
+      final gold = tester
+          .widget<ScoreGainOverlay>(find.byType(ScoreGainOverlay))
+          .controller;
+      final gain = gold.gains.firstWhere((g) => g.id == 1);
+      final attack = gain.points;
       await tester.tapAt(point(2));
       await waitAt(1.5);
+      expect(gain.points, greaterThan(attack));
+      expect(gain.holding, isTrue);
+      expect(gain.origin, point(1));
       await tester.tapAt(point(3));
       await waitAt(2.02);
       await left.up();
+      await tester.pump();
+      expect(gain.holding, isFalse);
+      expect(gain.points, greaterThanOrEqualTo(attack + 350));
       await waitAt(2.2);
       await tester.tapAt(point(0));
       await waitAt(3);

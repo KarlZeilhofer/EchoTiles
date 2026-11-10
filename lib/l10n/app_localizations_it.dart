@@ -255,7 +255,7 @@ class AppLocalizationsIt extends AppLocalizations {
 
   @override
   String get rhythmDifficulty =>
-      'La variante B aggiunge suddivisioni musicali. Ogni pollice resta nella sua metà.';
+      'La variante B mantiene un numero fisso in ogni sezione di 10 secondi.';
 
   @override
   String get analyzeHoldsHint =>
@@ -275,5 +275,5 @@ class AppLocalizationsIt extends AppLocalizations {
 
   @override
   String get variantBDescription =>
-      'Suddivisioni musicali, progressione lineare e accenti per due pollici.';
+      'Numero fisso di tessere ogni 10 secondi, integrate sul ritmo.';
 }

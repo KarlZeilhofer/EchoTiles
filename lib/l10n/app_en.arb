@@ -89,11 +89,11 @@
   "analysisFailed": "Analysis failed. Try another audio file.",
   "noBeatsFound": "No distinct notes or beats found.",
   "startRhythm": "Tap START to begin. Release sliders when their tail reaches the line.",
-  "rhythmDifficulty": "Variant B adds musical subdivisions over the song. Each thumb stays on its half.",
+  "rhythmDifficulty": "Variant B keeps a fixed count in every 10-second section.",
   "analyzeHoldsHint": "Analyze again for vocals and fading sounds.",
   "tileVariantTitle": "TILE GENERATION",
   "variantA": "Variant A",
   "variantB": "Variant B",
   "variantADescription": "Previous note selection and acceleration.",
-  "variantBDescription": "Musical subdivisions, linear progression and two-thumb accents."
+  "variantBDescription": "Fixed tiles per 10 seconds, with beat-aligned fillers."
 }

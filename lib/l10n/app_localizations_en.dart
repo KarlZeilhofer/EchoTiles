@@ -253,7 +253,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get rhythmDifficulty =>
-      'Variant B adds musical subdivisions over the song. Each thumb stays on its half.';
+      'Variant B keeps a fixed count in every 10-second section.';
 
   @override
   String get analyzeHoldsHint => 'Analyze again for vocals and fading sounds.';
@@ -272,5 +272,5 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get variantBDescription =>
-      'Musical subdivisions, linear progression and two-thumb accents.';
+      'Fixed tiles per 10 seconds, with beat-aligned fillers.';
 }

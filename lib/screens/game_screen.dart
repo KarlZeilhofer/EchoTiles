@@ -14,6 +14,7 @@ import '../models/tile_hit_test.dart';
 import '../services/audio_service.dart';
 import '../services/haptics.dart';
 import '../services/storage_service.dart';
+import '../widgets/score_gain_overlay.dart';
 
 class GameScreen extends StatefulWidget {
   final SongItem song;
@@ -39,6 +40,9 @@ class _GameScreenState extends State<GameScreen>
   final Stopwatch _monotonic = Stopwatch();
   late final PlaybackClock _clock;
   final ValueNotifier<int> _frames = ValueNotifier<int>(0);
+  final ScoreGainController _gold = ScoreGainController();
+  final GlobalKey _scoreAnchor = GlobalKey();
+  final GlobalKey _playfieldAnchor = GlobalKey();
   int _lastHudTick = -1;
   bool _audioStarted = false;
   bool _audioStarting = false;
@@ -104,6 +108,7 @@ class _GameScreenState extends State<GameScreen>
     _songProgress = 0;
     _tiles.clear();
     _feedbacks.clear();
+    _gold.clear();
     _activeHolds.clear();
     final first = widget.analysis.notes.first;
     final endY = RhythmTimeline.position(
@@ -262,6 +267,7 @@ class _GameScreenState extends State<GameScreen>
     _failedLane = lane;
     _clock.pause();
     _ticker.stop();
+    _gold.releaseAll();
     AudioService.instance.stopSong();
     Haptics.heavy();
     if (mistapOffset != null) {
@@ -336,13 +342,15 @@ class _GameScreenState extends State<GameScreen>
     final quality = TileHitTest.quality(tile, _targetLineFactor);
     _combo++;
     _maxCombo = max(_maxCombo, _combo);
-    _score +=
+    final points =
         (quality == HitQuality.perfect
             ? 100
             : quality == HitQuality.great
             ? 80
             : 50) +
         _combo * 2;
+    _score += points;
+    _gold.begin(tile.id, points, Offset(tapX, tapY), holding: tile.isLong);
     if (tile.isLong) {
       tile.isHolding = true;
       final note = widget.analysis.notes[tile.noteIndex];
@@ -375,6 +383,7 @@ class _GameScreenState extends State<GameScreen>
     final points = tile.holdScoreRemainder + heldSeconds * 220;
     final earned = (points + 1e-9).floor();
     _score += earned;
+    _gold.add(tile.id, earned);
     tile.holdScoreRemainder = points - earned;
     final previousStep = (tile.holdProgress * 10).floor();
     tile.holdProgress = time >= note.endTime
@@ -394,6 +403,7 @@ class _GameScreenState extends State<GameScreen>
     tile.holdProgress = 1;
     _activeHolds.removeWhere((_, id) => id == tile.id);
     _score += 150;
+    _gold.release(tile.id, bonus: 150);
     _combo += 2;
     _maxCombo = max(_maxCombo, _combo);
     Haptics.medium();
@@ -404,6 +414,7 @@ class _GameScreenState extends State<GameScreen>
     if (id == null) return;
     final tile = _tiles.where((t) => t.id == id && t.isHolding).firstOrNull;
     if (tile == null) return;
+    _gold.move(tile.id, event.localPosition);
     final lane = (event.localPosition.dx / (screenSize.width / 4))
         .floor()
         .clamp(0, 3);
@@ -446,7 +457,10 @@ class _GameScreenState extends State<GameScreen>
       tile.isHit = true;
       if (!cancelled && tile.holdProgress >= 0.85) {
         _score += 100;
+        _gold.release(tile.id, bonus: 100);
         Haptics.medium();
+      } else {
+        _gold.release(tile.id);
       }
     }
     setState(() {});
@@ -459,11 +473,24 @@ class _GameScreenState extends State<GameScreen>
     _clock.pause();
     _ticker.dispose();
     _frames.dispose();
+    _gold.dispose();
     _monotonic.stop();
     _positionSub?.cancel();
     _completeSub?.cancel();
     AudioService.instance.stopSong();
     super.dispose();
+  }
+
+  Offset? _scorePosition() {
+    final counter = _scoreAnchor.currentContext?.findRenderObject();
+    final field = _playfieldAnchor.currentContext?.findRenderObject();
+    if (counter is! RenderBox || field is! RenderBox || !counter.hasSize) {
+      return null;
+    }
+    return counter.localToGlobal(
+      counter.size.center(Offset.zero),
+      ancestor: field,
+    );
   }
 
   @override
@@ -480,6 +507,7 @@ class _GameScreenState extends State<GameScreen>
     return Scaffold(
       backgroundColor: theme.background,
       body: Stack(
+        key: _playfieldAnchor,
         children: [
           Positioned.fill(
             child: LayoutBuilder(
@@ -530,6 +558,13 @@ class _GameScreenState extends State<GameScreen>
             _buildEndOverlay(theme, isWin: false),
           if (_status == GameStatus.victory)
             _buildEndOverlay(theme, isWin: true),
+          if (_status != GameStatus.paused)
+            Positioned.fill(
+              child: ScoreGainOverlay(
+                controller: _gold,
+                scoreTarget: _scorePosition,
+              ),
+            ),
         ],
       ),
     );
@@ -570,14 +605,17 @@ class _GameScreenState extends State<GameScreen>
                     ),
                     Column(
                       children: [
-                        Text(
-                          '$_score',
-                          key: const ValueKey('game-score'),
-                          style: TextStyle(
-                            fontFamily: 'Fredoka',
-                            fontSize: 30,
-                            fontWeight: FontWeight.w900,
-                            color: theme.textPrimary,
+                        SizedBox(
+                          key: _scoreAnchor,
+                          child: Text(
+                            '$_score',
+                            key: const ValueKey('game-score'),
+                            style: TextStyle(
+                              fontFamily: 'Fredoka',
+                              fontSize: 30,
+                              fontWeight: FontWeight.w900,
+                              color: theme.textPrimary,
+                            ),
                           ),
                         ),
                         if (_combo > 1)

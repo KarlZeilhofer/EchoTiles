@@ -2,7 +2,7 @@
 
 Android rhythm-analysis fork of [Sidhant’s EchoTiles](https://github.com/sidhant947/EchoTiles).
 
-## Try version 1.4.1
+## Try version 1.5.0
 
 Download the APK at **https://alpenchat.at/downloads/** and install over the
 existing test app. It has a separate application ID
@@ -22,7 +22,7 @@ system-supported formats on a worker thread. Streaming mono 22.05 kHz audio,
 a 1024-sample Hann FFT, positive log spectral flux, adaptive thresholds and
 peak picking produce actual onset candidates. Compact spectral profiles track
 quiet vocals and audible decay. This is a mixed-music heuristic, not source
-separation or polyphonic pitch transcription. Silence does not invent notes.
+separation or polyphonic pitch transcription. Completely silent recordings are rejected.
 
 Analysis schema **v4** saves onset evidence, salience, duration and two-band
 attack flags independently of either chart. Older schemas are rejected by the
@@ -34,23 +34,27 @@ Engine/schema changes must bump `SongAnalysis.version` to invalidate old data.
 
 - **A:** keeps the prior onset-spacing gate, 380 → 140 ms over the song, and
   the prior scroll curve `0.5 * (1 + 1.5 * progress^2.5)` screen heights/second.
-- **B:** locally fits tempo and phase in 10-second sections and prefers whole,
-  half and quarter bars before finer/off-grid accents. Four beats per bar is
-  a ranking assumption, not automatic time-signature transcription. The grid
-  ranks measured onsets; timestamps are never snapped or fabricated.
-- Since 1.4.1, B’s target tile rate starts at approximately three per four beats
-  (about 15 tiles/10 seconds at 120 BPM, previously 5) and rises
-  linearly to 2.5×. Each 10-second budget integrates this rate, carrying only
-  fractional rounding. Quiet passages or occupied thumbs may stay below the
-  target; missed quotas do not accumulate and flood the next passage.
-  Quiet sections elsewhere no longer reduce the starting target. Existing v4
-  audio evidence is reused; charts are rebuilt with the new density on load.
-- B allows extra accents beside a held note on the free thumb. Strong attacks
-  with independent low and high spectral energy can produce two simultaneous
-  taps, one per hand, within the same tile budget. The first START stays single.
+- **B:** uses fixed, song-independent quotas in consecutive 10-second windows.
+  The first window rate is **15 tiles/10 seconds**, the final window rate
+  **37.5 tiles/10 seconds**. Intermediate rates rise in equal steps. Each
+  full window rounds its count to whole tiles; a partial final window is scaled
+  to its actual duration. A two-minute song has counts
+  `15, 17, 19, 21, 23, 25, 27, 29, 31, 33, 35, 38`. Neither
+  BPM nor the number of detected attacks changes the quota.
+- Each window is divided into paced slots. B prefers measured onsets inside
+  each slot and locally fits tempo/phase to rank them. If no playable attack is
+  available, a beat-grid tile fills the slot, including in quiet passages.
+  Four beats/bar is a ranking assumption. Real onsets keep their timestamps;
+  supplemental notes use metrical subdivisions. There is no quota underfill.
+- One thumb stays available while a sustain is held. A second overlapping
+  sustain becomes a tap so it cannot block the fixed pace. The first vocal
+  keeps its measured tail, capped at four seconds. Strong measured two-band
+  attacks can still consume two adjacent slots as simultaneous taps on
+  opposite hands. START remains single.
 - B’s visual speed rises linearly from 0.5 to 1.25 screen heights/second.
   Positions use the integral of that speed, so every head and tail moves the
-  same distance per frame and crosses the line at its measured audio time.
+  same distance per frame and crosses the line at its assigned audio time
+  (measured attack or supplemental beat-grid position).
 
 ## Input, sliders and rendering
 
@@ -73,6 +77,13 @@ tolerance, lowest candidate first, rating thresholds 0.05/0.11, missed boundary
 y > 1.02. Painting and input share bounds. The judgment line is 45% from the
 bottom. No millisecond hit gate is applied to ordinary taps.
 
+Score gains appear above the actual contact in glowing, metallic gold with a
+bright highlights and animated sparkles, then arc into the score counter. A held slider
+keeps one live, growing gain label above the finger; on release its accumulated
+reward and any bonus fly together. A separate paint-only ticker animates the
+feedback without rebuilding gameplay or intercepting taps. Animation pauses
+with the game, and score accounting remains immediate and unchanged.
+
 A monotonic clock slews audio drift at at most ±10%; native position polling
 runs at 10 Hz, tiles repaint at vsync, and the HUD updates at 10 Hz. Pause and
 backgrounding freeze playback; muting still advances the music.
@@ -88,13 +99,15 @@ flutter test
 cd android && ./gradlew :app:testDebugUnitTest
 cd ..
 flutter test integration_test -d emulator-5554
+# AOT profile check for tight release timing:
+flutter drive --profile --driver=test_driver/integration_test.dart --target=integration_test/startup_flow_test.dart -d emulator-5554
 flutter build apk --release
 ```
 
-Tests cover detection, musical timing, 10-second density budgets, simultaneous
+Tests cover detection, musical timing, exact 10-second quotas across tempos, lengths and sparse passages, simultaneous
 accents, free-thumb subdivisions, 4-second caps, original tap geometry, live
 scoring, pause, release deadlines, actual audio completion, automatic analysis
-upgrades, and sharing a cache between A/B. Device tests decode WAV and MP3.
+upgrades, and sharing a cache between A/B. Device tests decode WAV and MP3 and verify live gold rewards against actual scoring.
 
 Release signing uses `android/key.properties` when supplied; otherwise this
 experimental fork uses the local Android debug key. The

@@ -89,11 +89,11 @@
   "analysisFailed": "Analisi non riuscita. Prova un altro file audio.",
   "noBeatsFound": "Nessuna nota o battito distinto trovato.",
   "startRhythm": "Tocca START per iniziare. Rilascia le tessere lunghe quando la coda raggiunge la linea.",
-  "rhythmDifficulty": "La variante B aggiunge suddivisioni musicali. Ogni pollice resta nella sua metà.",
+  "rhythmDifficulty": "La variante B mantiene un numero fisso in ogni sezione di 10 secondi.",
   "analyzeHoldsHint": "Analizza di nuovo per voci e suoni in dissolvenza.",
   "tileVariantTitle": "GENERAZIONE TESSERE",
   "variantA": "Variante A",
   "variantB": "Variante B",
   "variantADescription": "Selezione e accelerazione precedenti.",
-  "variantBDescription": "Suddivisioni musicali, progressione lineare e accenti per due pollici."
+  "variantBDescription": "Numero fisso di tessere ogni 10 secondi, integrate sul ritmo."
 }

@@ -29,93 +29,129 @@ void expectHands(List<AnalyzedNote> notes) {
 }
 
 void main() {
+  const quotas = [15, 17, 19, 21, 23, 25, 27, 29, 31, 33, 35, 38];
+  void expectQuotas(List<AnalyzedNote> notes, double duration) {
+    for (var start = 0.0; start < duration; start += 10) {
+      expect(
+        notes.where((n) => n.time >= start && n.time < start + 10).length,
+        RhythmChartPlanner.windowQuota(start, duration),
+        reason: 'Window $start',
+      );
+    }
+    expectHands(notes);
+  }
+
   test(
-    'B ten-second tile budgets follow a linear ramp on audible subdivisions',
+    'B meets identical exact ten-second quotas at different song tempos',
     () {
-      final input = pulseGrid(120);
-      final notes = RhythmChartPlanner.plan(input, 120, 120);
-      expect(notes.map((n) => n.lane).toSet(), {0, 1, 2, 3});
-      final counts = <int>[];
-      for (var start = 0.0; start < 120; start += 10) {
-        final count = notes
-            .where((n) => n.time >= start && n.time < start + 10)
-            .length;
-        counts.add(count);
-        final expected = 10 * RhythmChartPlanner.density(start + 5, 120, 1.5);
-        expect(count, closeTo(expected, 1), reason: 'Window $start');
+      for (final bpm in [0.0, 60.0, 80.0, 120.0, 180.0]) {
+        final notes = RhythmChartPlanner.plan(pulseGrid(120), bpm, 120);
+        expect(notes.length, 313);
+        for (var i = 0; i < quotas.length; i++) {
+          expect(
+            notes
+                .where((n) => n.time >= i * 10 && n.time < (i + 1) * 10)
+                .length,
+            quotas[i],
+            reason: 'BPM $bpm, window $i',
+          );
+        }
+        expect(notes.map((n) => n.lane).toSet(), {0, 1, 2, 3});
+        expectQuotas(notes, 120);
       }
-      expect(counts.first, 16);
-      expect(counts.last, 37);
-      final intro = notes.where((n) => n.time < 10).toList();
-      expect(
-        intro.map((n) => n.time),
-        containsAll([for (var i = 0; i < 10; i++) i.toDouble()]),
-      );
-      expect(
-        intro.where((n) => n.time % 1 == 0.5).length,
-        greaterThanOrEqualTo(5),
-      );
-      expect(
-        notes.where((n) => n.time >= 110).any((n) => n.time % 1 == 0.5),
-        isTrue,
-      );
-      expect(
-        notes.every((n) => input.any((c) => c.note.time == n.time)),
-        isTrue,
-      );
-      expectHands(notes);
     },
   );
 
-  test('B supports strong two-band accents on opposite thumbs only', () {
-    final notes = RhythmChartPlanner.plan(
-      pulseGrid(120, doubles: true),
-      120,
-      120,
-    );
-    final simultaneous = [
-      for (var i = 1; i < notes.length; i++)
-        if (notes[i].time == notes[i - 1].time) [notes[i - 1], notes[i]],
-    ];
-    expect(simultaneous, isNotEmpty);
-    for (final pair in simultaneous) {
-      expect(pair[0].lane ~/ 2, isNot(pair[1].lane ~/ 2));
-      expect(pair[0].time % 2, 0);
+  test('B starts every full first window at 15 regardless of song length', () {
+    for (final duration in [20.0, 60.0, 120.0, 600.0]) {
+      expect(RhythmChartPlanner.windowQuota(0, duration), 15);
     }
-    expect(notes.where((n) => n.time == notes.first.time).length, 1);
-    expectHands(notes);
-  });
-
-  test('B has rhythmic extra taps on the free thumb while a vocal is held', () {
-    final input = pulseGrid(20);
-    input[0] = const OnsetCandidate(
-      AnalyzedNote(0, 0, duration: 4),
-      strength: 3,
-    );
-    final notes = RhythmChartPlanner.plan(input, 120, 20);
-    expect(notes.first.isLong, isTrue);
-    final extra = notes.skip(1).where((n) => n.time < 4.1).toList();
-    expect(extra.length, greaterThanOrEqualTo(2));
-    expect(extra.every((n) => n.lane ~/ 2 != notes.first.lane ~/ 2), isTrue);
-    expectHands(notes);
   });
 
   test(
-    'B never fills silence or invents duplicate mono notes to meet quotas',
+    'B fills sparse passages on the metrical grid instead of reducing rate',
+    () {
+      final input = pulseGrid(10);
+      final notes = RhythmChartPlanner.plan(input, 120, 120);
+      expect(notes.where((n) => n.time >= 10), isNotEmpty);
+      expect(
+        notes
+            .where((n) => n.time >= 10)
+            .every((n) => (n.time * 16 - (n.time * 16).round()).abs() < 1e-6),
+        isTrue,
+      );
+      expectQuotas(notes, 120);
+    },
+  );
+
+  test('strict slots spread notes across the entire window even for clustered input', () {
+    final input = [
+      for (var i = 0; i < 30; i++) OnsetCandidate(AnalyzedNote(i * 0.01, 0)),
+    ];
+    final notes = RhythmChartPlanner.plan(input, 120, 120);
+    final intro = notes.where((n) => n.time < 10).toList();
+    expect(intro.last.time, greaterThan(9));
+    for (var i = 1; i < intro.length; i++) {
+      expect(intro[i].time - intro[i - 1].time, lessThan(1.25));
+    }
+    expectQuotas(notes, 120);
+  });
+
+  test('B keeps audible chords on opposite hands within the exact quota', () {
+    final input = pulseGrid(120, doubles: true);
+    final notes = RhythmChartPlanner.plan(input, 120, 120);
+    final chords = [
+      for (var i = 1; i < notes.length; i++)
+        if (notes[i].time == notes[i - 1].time) [notes[i - 1], notes[i]],
+    ];
+    expect(chords, isNotEmpty);
+    for (final pair in chords) {
+      expect(pair[0].lane ~/ 2, isNot(pair[1].lane ~/ 2));
+      expect(
+        input.any((c) => c.doubleAccent && c.note.time == pair[0].time),
+        isTrue,
+      );
+    }
+    expect(notes.where((n) => n.time == notes.first.time).length, 1);
+    expectQuotas(notes, 120);
+  });
+
+  test(
+    'overlapping vocals leave a thumb free and cannot underfill fixed quotas',
     () {
       final input = [
-        ...pulseGrid(10),
-        ...pulseGrid(10).map(
-          (c) => OnsetCandidate(
-            AnalyzedNote(c.note.time + 30, c.note.lane),
-            strength: c.strength,
-          ),
-        ),
+        for (var i = 0; i < 464; i++)
+          OnsetCandidate(AnalyzedNote(i * 0.25, i % 4, duration: 4)),
       ];
-      final notes = RhythmChartPlanner.plan(input, 120, 40);
-      expect(notes.any((n) => n.time >= 10 && n.time < 30), isFalse);
-      expect(notes.map((n) => n.time).toSet().length, notes.length);
-      expectHands(notes);
+      final notes = RhythmChartPlanner.plan(input, 120, 120);
+      expect(notes.first.duration, 4);
+      expect(notes.where((n) => n.isLong), isNotEmpty);
+      for (final note in notes.where((n) => n.isLong)) {
+        expect(
+          notes
+              .where(
+                (n) => n.isLong && n.time <= note.time && n.endTime > note.time,
+              )
+              .length,
+          1,
+        );
+      }
+      expectQuotas(notes, 120);
+    },
+  );
+
+  test(
+    'partial final windows and short clips also have exact playable quotas',
+    () {
+      for (final duration in [0.12, 10.1, 10.2, 23.7, 120.01]) {
+        final notes = RhythmChartPlanner.plan(
+          const [OnsetCandidate(AnalyzedNote(0, 0, duration: 0))],
+          75,
+          duration,
+        );
+        expect(notes.every((n) => n.time >= 0 && n.time < duration), isTrue);
+        expectQuotas(notes, duration);
+      }
     },
   );
 
@@ -148,22 +184,6 @@ void main() {
       );
     },
   );
-
-  test('a quiet rest of the song cannot thin an active introduction', () {
-    final input = pulseGrid(10);
-    final notes = RhythmChartPlanner.plan(input, 120, 120);
-    expect(notes.where((n) => n.time < 10).length, 16);
-    expect(notes.every((n) => n.time < 10), isTrue);
-    expectHands(notes);
-  });
-
-  test('unknown tempo also gets an active intro without fabricated notes', () {
-    final input = pulseGrid(120);
-    final notes = RhythmChartPlanner.plan(input, 0, 120);
-    expect(notes.where((n) => n.time < 10).length, 16);
-    expect(notes.every((n) => input.any((c) => c.note.time == n.time)), isTrue);
-    expectHands(notes);
-  });
 
   test('sliders are capped at four seconds for both old and new analyses', () {
     for (final version in [1, 2, 3, 4]) {

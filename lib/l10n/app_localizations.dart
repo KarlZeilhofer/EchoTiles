@@ -551,7 +551,7 @@ abstract class AppLocalizations {
   /// No description provided for @rhythmDifficulty.
   ///
   /// In en, this message translates to:
-  /// **'Variant B adds musical subdivisions over the song. Each thumb stays on its half.'**
+  /// **'Variant B keeps a fixed count in every 10-second section.'**
   String get rhythmDifficulty;
 
   /// No description provided for @analyzeHoldsHint.
@@ -587,7 +587,7 @@ abstract class AppLocalizations {
   /// No description provided for @variantBDescription.
   ///
   /// In en, this message translates to:
-  /// **'Musical subdivisions, linear progression and two-thumb accents.'**
+  /// **'Fixed tiles per 10 seconds, with beat-aligned fillers.'**
   String get variantBDescription;
 }
 
