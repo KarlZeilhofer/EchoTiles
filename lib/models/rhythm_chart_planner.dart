@@ -57,7 +57,7 @@ class RhythmChartPlanner {
       // at slow tempos. Coarser beats are preferred within each slot.
       final subdivisions = pow(
         2,
-        max(0, (log(grid.period / min(0.08, width / 3)) / ln2).ceil()),
+        max(0, (log(grid.period / min(0.04, width / 3)) / ln2).ceil()),
       );
       final step = grid.period / subdivisions;
       final used = <OnsetCandidate>{};

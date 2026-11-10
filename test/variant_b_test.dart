@@ -77,7 +77,7 @@ void main() {
       expect(
         notes
             .where((n) => n.time >= 10)
-            .every((n) => (n.time * 16 - (n.time * 16).round()).abs() < 1e-6),
+            .every((n) => (n.time * 32 - (n.time * 32).round()).abs() < 1e-6),
         isTrue,
       );
       expectQuotas(notes, 120);
@@ -154,6 +154,25 @@ void main() {
       }
     },
   );
+
+  test('dense window boundaries still fit taps beside a held note at varied phases', () {
+    for (final bpm in [97.0, 100.0, 107.0, 113.0]) {
+      for (var phase = 0; phase < 8; phase++) {
+        final notes = RhythmChartPlanner.plan(
+          [
+            const OnsetCandidate(AnalyzedNote(0, 0)),
+            OnsetCandidate(
+              AnalyzedNote(206.1 + phase * 0.02, 0, duration: 3.7),
+            ),
+            const OnsetCandidate(AnalyzedNote(209.7221, 2)),
+          ],
+          bpm,
+          220,
+        );
+        expectQuotas(notes, 220);
+      }
+    }
+  });
 
   test(
     'one v4 analysis can rebuild either variant without changing its evidence',
