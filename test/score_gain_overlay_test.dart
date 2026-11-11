@@ -14,21 +14,24 @@ void main() {
       'Fredoka',
     )..addFont(rootBundle.load('assets/fonts/Fredoka.ttf'))).load();
   });
-  test('tap gain starts above contact, flies to score, then expires', () {
-    final gold = ScoreGainController();
-    const target = Offset(200, 45);
-    gold.begin(1, 102, const Offset(100, 400));
-    final gain = gold.gains.single;
-    expect(gain.position(target), const Offset(100, 334));
-    gold.advance(0.6);
-    expect(gain.position(target).dy, lessThan(334));
-    expect(gain.position(target).dx, greaterThan(100));
-    gold.advance(0.4);
-    expect(gain.position(target), target);
-    gold.advance(0.2);
-    expect(gold.gains, isEmpty);
-    gold.dispose();
-  });
+  test(
+    'tap gain stays above its contact and fades completely within 300 ms',
+    () {
+      final gold = ScoreGainController();
+      gold.begin(1, 102, const Offset(100, 400));
+      final gain = gold.gains.single;
+      expect(gain.position, const Offset(100, 334));
+      gold.advance(0.15);
+      expect(gain.position, const Offset(100, 334));
+      expect(gain.opacity, 1);
+      gold.advance(0.1);
+      expect(gain.position, const Offset(100, 334));
+      expect(gain.opacity, closeTo(0.5, 1e-9));
+      gold.advance(0.051);
+      expect(gold.gains, isEmpty);
+      gold.dispose();
+    },
+  );
 
   test(
     'slider gain counts live, remains above contact and includes release bonus',
@@ -38,9 +41,8 @@ void main() {
       gold.advance(3);
       gold.add(2, 660);
       expect(gold.gains.single.points, 764);
-      expect(gold.gains.single.flight, 0);
-      gold.move(2, const Offset(305, 410));
-      expect(gold.gains.single.origin, const Offset(305, 410));
+      expect(gold.gains.single.opacity, 1);
+      expect(gold.gains.single.position, const Offset(300, 334));
       gold.release(2, bonus: 150);
       expect(gold.gains.single.points, 914);
       gold.add(2, 99);
@@ -49,14 +51,17 @@ void main() {
         914,
         reason: 'Released gain must stop counting',
       );
-      gold.advance(1.2);
+      gold.advance(0.25);
+      expect(gold.gains.single.position, const Offset(300, 334));
+      expect(gold.gains.single.opacity, closeTo(0.5, 1e-9));
+      gold.advance(0.051);
       expect(gold.gains, isEmpty);
       gold.dispose();
     },
   );
 
   testWidgets(
-    'gold overlay paints without blocking taps and animates after a hold',
+    'larger stationary gold labels remain touch-transparent and fade after release',
     (tester) async {
       final gold = ScoreGainController();
       final boundary = GlobalKey();
@@ -89,12 +94,7 @@ void main() {
                       onTap: () => taps++,
                     ),
                   ),
-                  Positioned.fill(
-                    child: ScoreGainOverlay(
-                      controller: gold,
-                      scoreTarget: () => const Offset(400, 55),
-                    ),
-                  ),
+                  Positioned.fill(child: ScoreGainOverlay(controller: gold)),
                 ],
               ),
             ),
@@ -118,9 +118,10 @@ void main() {
         image.dispose();
       });
       gold.release(2, bonus: 150);
-      await tester.pump(const Duration(milliseconds: 600));
-      expect(gold.gains.any((g) => g.flight > 0), isTrue);
-      await tester.pump(const Duration(seconds: 1));
+      await tester.pump(const Duration(milliseconds: 250));
+      expect(gold.gains.single.position, const Offset(540, 294));
+      expect(gold.gains.single.opacity, closeTo(0.5, 1e-9));
+      await tester.pump(const Duration(milliseconds: 60));
       expect(gold.gains, isEmpty);
       expect(tester.takeException(), isNull);
       await tester.pumpWidget(const SizedBox.shrink());

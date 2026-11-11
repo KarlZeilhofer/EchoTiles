@@ -2,7 +2,7 @@
 
 Android rhythm-analysis fork of [Sidhant’s EchoTiles](https://github.com/sidhant947/EchoTiles).
 
-## Try version 1.5.0
+## Try version 1.5.1
 
 Download the APK at **https://alpenchat.at/downloads/** and install over the
 existing test app. It has a separate application ID
@@ -77,12 +77,14 @@ tolerance, lowest candidate first, rating thresholds 0.05/0.11, missed boundary
 y > 1.02. Painting and input share bounds. The judgment line is 45% from the
 bottom. No millisecond hit gate is applied to ordinary taps.
 
-Score gains appear above the actual contact in glowing, metallic gold with a
-bright highlights and animated sparkles, then arc into the score counter. A held slider
-keeps one live, growing gain label above the finger; on release its accumulated
-reward and any bonus fly together. A separate paint-only ticker animates the
-feedback without rebuilding gameplay or intercepting taps. Animation pauses
-with the game, and score accounting remains immediate and unchanged.
+Score gains appear above the original contact in glowing, metallic gold with
+bright highlights and animated sparkles. Since 1.5.1 the numbers are 50% larger
+(37.5 logical pixels) and stay at that position instead of flying to the score.
+Tap gains disappear within 300 ms, fading over the final 100 ms. A held slider
+keeps its live, growing gain label visible until release; the final gain and
+bonus then fade at the same position within 300 ms. A separate paint-only ticker
+updates the feedback without rebuilding gameplay or intercepting taps.
+Animation pauses with the game, and score accounting remains immediate.
 
 A monotonic clock slews audio drift at at most ±10%; native position polling
 runs at 10 Hz, tiles repaint at vsync, and the HUD updates at 10 Hz. Pause and

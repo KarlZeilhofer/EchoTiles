@@ -41,8 +41,6 @@ class _GameScreenState extends State<GameScreen>
   late final PlaybackClock _clock;
   final ValueNotifier<int> _frames = ValueNotifier<int>(0);
   final ScoreGainController _gold = ScoreGainController();
-  final GlobalKey _scoreAnchor = GlobalKey();
-  final GlobalKey _playfieldAnchor = GlobalKey();
   int _lastHudTick = -1;
   bool _audioStarted = false;
   bool _audioStarting = false;
@@ -414,7 +412,6 @@ class _GameScreenState extends State<GameScreen>
     if (id == null) return;
     final tile = _tiles.where((t) => t.id == id && t.isHolding).firstOrNull;
     if (tile == null) return;
-    _gold.move(tile.id, event.localPosition);
     final lane = (event.localPosition.dx / (screenSize.width / 4))
         .floor()
         .clamp(0, 3);
@@ -481,18 +478,6 @@ class _GameScreenState extends State<GameScreen>
     super.dispose();
   }
 
-  Offset? _scorePosition() {
-    final counter = _scoreAnchor.currentContext?.findRenderObject();
-    final field = _playfieldAnchor.currentContext?.findRenderObject();
-    if (counter is! RenderBox || field is! RenderBox || !counter.hasSize) {
-      return null;
-    }
-    return counter.localToGlobal(
-      counter.size.center(Offset.zero),
-      ancestor: field,
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     final theme = widget.appTheme;
@@ -507,7 +492,6 @@ class _GameScreenState extends State<GameScreen>
     return Scaffold(
       backgroundColor: theme.background,
       body: Stack(
-        key: _playfieldAnchor,
         children: [
           Positioned.fill(
             child: LayoutBuilder(
@@ -559,12 +543,7 @@ class _GameScreenState extends State<GameScreen>
           if (_status == GameStatus.victory)
             _buildEndOverlay(theme, isWin: true),
           if (_status != GameStatus.paused)
-            Positioned.fill(
-              child: ScoreGainOverlay(
-                controller: _gold,
-                scoreTarget: _scorePosition,
-              ),
-            ),
+            Positioned.fill(child: ScoreGainOverlay(controller: _gold)),
         ],
       ),
     );
@@ -606,7 +585,6 @@ class _GameScreenState extends State<GameScreen>
                     Column(
                       children: [
                         SizedBox(
-                          key: _scoreAnchor,
                           child: Text(
                             '$_score',
                             key: const ValueKey('game-score'),

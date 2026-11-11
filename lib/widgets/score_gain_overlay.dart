@@ -13,22 +13,13 @@ class ScoreGain {
   ScoreGain(this.id, this.origin, this.points, this.holding)
     : releasedAt = holding ? null : 0;
 
-  double get flight => releasedAt == null
-      ? 0
-      : ((age - releasedAt! - 0.24) / 0.72).clamp(0.0, 1.0);
-  bool get finished => releasedAt != null && age - releasedAt! >= 1.12;
-
-  Offset position(Offset target) {
-    final start = origin - const Offset(0, 66);
-    final t = Curves.easeInOutCubic.transform(flight);
-    final control = Offset(
-      start.dx + (start.dx < target.dx ? -28 : 28),
-      min(start.dy, target.dy) - 28,
-    );
-    return start * ((1 - t) * (1 - t)) +
-        control * (2 * (1 - t) * t) +
-        target * (t * t);
-  }
+  static const lifetime = 0.3;
+  static const fadeDuration = 0.1;
+  double get opacity => releasedAt == null
+      ? 1.0
+      : ((lifetime - (age - releasedAt!)) / fadeDuration).clamp(0.0, 1.0);
+  bool get finished => releasedAt != null && age - releasedAt! >= lifetime;
+  Offset get position => origin - const Offset(0, 66);
 }
 
 /// Visual rewards mirror scoring; this controller never changes game points.
@@ -45,13 +36,6 @@ class ScoreGainController extends ChangeNotifier {
     final gain = gains.where((g) => g.id == id && g.holding).firstOrNull;
     if (gain == null) return;
     gain.points += points;
-    notifyListeners();
-  }
-
-  void move(int id, Offset origin) {
-    final gain = gains.where((g) => g.id == id && g.holding).firstOrNull;
-    if (gain == null) return;
-    gain.origin = origin;
     notifyListeners();
   }
 
@@ -86,16 +70,11 @@ class ScoreGainController extends ChangeNotifier {
   }
 }
 
-/// A separate, paint-only ticker keeps points flying after the last tile,
+/// A separate, paint-only ticker fades points after the last tile,
 /// without rebuilding the game or participating in pointer hit testing.
 class ScoreGainOverlay extends StatefulWidget {
   final ScoreGainController controller;
-  final Offset? Function() scoreTarget;
-  const ScoreGainOverlay({
-    super.key,
-    required this.controller,
-    required this.scoreTarget,
-  });
+  const ScoreGainOverlay({super.key, required this.controller});
 
   @override
   State<ScoreGainOverlay> createState() => _ScoreGainOverlayState();
@@ -110,7 +89,7 @@ class _ScoreGainOverlayState extends State<ScoreGainOverlay>
   @override
   void initState() {
     super.initState();
-    _painter = _GoldPainter(widget.controller, () => widget.scoreTarget());
+    _painter = _GoldPainter(widget.controller);
     _ticker = createTicker((elapsed) {
       final delta = elapsed - _last;
       _last = elapsed;
@@ -154,7 +133,7 @@ class _GoldLabel {
           text: '+$points',
           style: TextStyle(
             fontFamily: 'Fredoka',
-            fontSize: 25,
+            fontSize: 37.5,
             fontWeight: FontWeight.w900,
             foreground: Paint()
               ..shader = const LinearGradient(
@@ -168,7 +147,7 @@ class _GoldLabel {
                   Color(0xFFEB9709),
                 ],
                 stops: [0, 0.32, 0.42, 0.70, 1],
-              ).createShader(const Rect.fromLTWH(0, 0, 100, 32)),
+              ).createShader(const Rect.fromLTWH(0, 0, 150, 48)),
           ),
         ),
         textDirection: TextDirection.ltr,
@@ -178,12 +157,12 @@ class _GoldLabel {
           text: '+$points',
           style: TextStyle(
             fontFamily: 'Fredoka',
-            fontSize: 25,
+            fontSize: 37.5,
             fontWeight: FontWeight.w900,
             foreground: Paint()
               ..color = const Color(0xFF824600)
               ..style = PaintingStyle.stroke
-              ..strokeWidth = 2,
+              ..strokeWidth = 3,
             shadows: const [Shadow(color: Color(0xB3FFC34A), blurRadius: 7)],
           ),
         ),
@@ -198,13 +177,11 @@ class _GoldLabel {
 
 class _GoldPainter extends CustomPainter {
   final ScoreGainController controller;
-  final Offset? Function() scoreTarget;
   final _labels = <int, _GoldLabel>{};
-  _GoldPainter(this.controller, this.scoreTarget) : super(repaint: controller);
+  _GoldPainter(this.controller) : super(repaint: controller);
 
   @override
   void paint(Canvas canvas, Size size) {
-    final target = scoreTarget() ?? Offset(size.width / 2, 48);
     final alive = controller.gains.map((g) => g.id).toSet();
     for (final id in _labels.keys.where((id) => !alive.contains(id)).toList()) {
       _labels.remove(id)!.dispose();
@@ -220,8 +197,7 @@ class _GoldPainter extends CustomPainter {
         label?.dispose();
         label = _labels[gain.id] = _GoldLabel(gain.points, tick);
       }
-      final flight = gain.flight;
-      final raw = gain.position(target);
+      final raw = gain.position;
       final point = Offset(
         raw.dx.clamp(
           label.fill.width / 2 + 8,
@@ -229,34 +205,15 @@ class _GoldPainter extends CustomPainter {
         ),
         max(20, raw.dy),
       );
-      final pop = gain.age < 0.22
-          ? 0.7 + 0.3 * Curves.easeOutBack.transform(gain.age / 0.22)
-          : 1.0 + 0.04 * sin((gain.age - 0.22) * 7) * (gain.holding ? 1 : 0);
-      final scale = pop * (1 - flight * 0.4);
-      final alpha = ((1 - flight) / 0.15).clamp(0.0, 1.0);
-      if (flight > 0.75) {
-        final pulse = sin((flight - 0.75) / 0.25 * pi);
-        canvas.drawCircle(
-          target,
-          12 + pulse * 16,
-          Paint()
-            ..shader = RadialGradient(
-              colors: [
-                const Color(0xFFFFD45C).withValues(alpha: pulse * 0.5),
-                Colors.transparent,
-              ],
-            ).createShader(Rect.fromCircle(center: target, radius: 30)),
-        );
-      }
+      final alpha = gain.opacity;
       canvas.save();
       canvas.translate(point.dx, point.dy);
-      canvas.scale(scale);
       final origin = Offset(-label.fill.width / 2, -label.fill.height / 2);
       final rect = origin & label.fill.size;
       final fading = alpha < 0.999;
       if (fading) {
         canvas.saveLayer(
-          rect.inflate(20),
+          rect.inflate(30),
           Paint()..color = Colors.white.withValues(alpha: alpha),
         );
       }
@@ -266,7 +223,7 @@ class _GoldPainter extends CustomPainter {
         final angle = gain.age * 2 + i * pi * 2 / 3;
         final spark = Offset(
           cos(angle) * (label.fill.width / 2 + 7),
-          sin(angle) * 19,
+          sin(angle) * 28.5,
         );
         final radius = (1.5 + 1.5 * sin(gain.age * 8 + i).abs()) * alpha;
         final paint = Paint()
