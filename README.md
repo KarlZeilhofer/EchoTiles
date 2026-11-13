@@ -2,7 +2,7 @@
 
 Android rhythm-analysis fork of [Sidhant’s EchoTiles](https://github.com/sidhant947/EchoTiles).
 
-## Try version 1.5.1
+## Try version 1.5.2
 
 Download the APK at **https://alpenchat.at/downloads/** and install over the
 existing test app. It has a separate application ID
@@ -63,8 +63,13 @@ whole half and a 100 ms release margin. No chart needs a third thumb or crossing
 thumbs. Lane balancing uses all four lanes. Sustains below 1 second are taps;
 longer sustains become sliders capped at **4 seconds**, including cached data.
 
-Held sliders earn 220 points/second and combo increments at 10% steps.
-Release at the tail for 150 completion points and two combo increments. Holding
+Perfect hits earn the full tap/combo reward and 220 points/second while held.
+Great hits earn 80% and Good hits 50% of the entire reward, including combo,
+hold ticks and release bonuses. A hold retains the grade of its initial hit.
+Perfect completion gives 150 points; Great 120; Good 75. Combo progress itself
+is unchanged. Equal combos and durations therefore always reward greater accuracy.
+Held sliders increment the combo at 10% steps.
+Release at the tail for the graded completion bonus and two combo increments. Holding
 more than **100 ms past the musical end loses**, including the final note after
 audio ends. Points stop at the musical end; release is required for the bonus.
 Pause freezes the deadline. Late up/move/cancel events cannot bypass it between
@@ -85,6 +90,13 @@ keeps its live, growing gain label visible until release; the final gain and
 bonus then fade at the same position within 300 ms. A separate paint-only ticker
 updates the feedback without rebuilding gameplay or intercepting taps.
 Animation pauses with the game, and score accounting remains immediate.
+
+Custom songs can only be removed after a confirmation dialog showing the song
+name. Drag the red thumb from the left to the right end, then release it.
+Taps on the track, incomplete/reversed drags, cancellation and dismissing the
+dialog do not delete anything. Only a physical pointer-up at the end confirms;
+a cancelled drag must not be treated as a successful drag-end. Confirmation
+removes the library entry and its cached analysis, while keeping the audio file.
 
 A monotonic clock slews audio drift at at most ±10%; native position polling
 runs at 10 Hz, tiles repaint at vsync, and the HUD updates at 10 Hz. Pause and
@@ -109,7 +121,9 @@ flutter build apk --release
 Tests cover detection, musical timing, exact 10-second quotas across tempos, lengths and sparse passages, simultaneous
 accents, free-thumb subdivisions, 4-second caps, original tap geometry, live
 scoring, pause, release deadlines, actual audio completion, automatic analysis
-upgrades, and sharing a cache between A/B. Device tests decode WAV and MP3 and verify live gold rewards against actual scoring.
+upgrades, and sharing a cache between A/B. Device tests decode WAV and MP3, verify live gold rewards against actual scoring,
+and verify that deletion needs a completed confirmation gesture and preserves
+the audio file.
 
 Release signing uses `android/key.properties` when supplied; otherwise this
 experimental fork uses the local Android debug key. The

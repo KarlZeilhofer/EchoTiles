@@ -75,6 +75,7 @@ class GameTile {
   double holdProgress;
   double holdScoredUntil = 0;
   double holdScoreRemainder = 0;
+  HitQuality hitQuality = HitQuality.perfect;
   bool isMissed;
   final int noteIndex;
 

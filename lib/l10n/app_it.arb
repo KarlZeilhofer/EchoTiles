@@ -65,7 +65,7 @@
   "singleTapSubtitle": "Tocca ogni tile proprio quando raggiunge la linea in basso.",
   "singleTapPoint1": "Tocca la tessera visibile nella sua corsia, come nel gioco originale F-Droid.",
   "singleTapPoint2": "Una tessera sovrapposta alla linea dà una valutazione PERFECT.",
-  "singleTapPoint3": "Un singolo tocco rimuove subito il tile.",
+  "singleTapPoint3": "Perfect assegna il 100%, Great l’80%, Good il 50% dei punti, inclusi i bonus combo e tenuta.",
   "holdTilesTitle": "TIENI PREMUTO I TILES",
   "holdTilesSubtitle": "Riconoscibili dalla testa circolare e dalla linea retta.",
   "holdTilesPoint1": "Le tessere lunghe durano da 1 a 4 secondi.",
@@ -95,5 +95,16 @@
   "variantA": "Variante A",
   "variantB": "Variante B",
   "variantADescription": "Selezione e accelerazione precedenti.",
-  "variantBDescription": "Numero fisso di tessere ogni 10 secondi, integrate sul ritmo."
+  "variantBDescription": "Numero fisso di tessere ogni 10 secondi, integrate sul ritmo.",
+  "deleteSongTitle": "Eliminare il brano?",
+  "deleteSongMessage": "Rimuovere “{title}” dalla lista ed eliminare la sua analisi? Il file audio resta sul dispositivo.",
+  "slideToDelete": "Scorri per eliminare",
+  "deleteSongFailed": "Impossibile eliminare il brano. Riprova.",
+  "@deleteSongMessage": {
+    "placeholders": {
+      "title": {
+        "type": "String"
+      }
+    }
+  }
 }

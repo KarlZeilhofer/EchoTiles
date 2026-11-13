@@ -407,7 +407,7 @@ abstract class AppLocalizations {
   /// No description provided for @singleTapPoint3.
   ///
   /// In en, this message translates to:
-  /// **'A single tap clears the tile immediately.'**
+  /// **'Perfect earns 100%, Great 80%, Good 50% of the reward, including combo and hold bonuses.'**
   String get singleTapPoint3;
 
   /// No description provided for @holdTilesTitle.
@@ -589,6 +589,30 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Fixed tiles per 10 seconds, with beat-aligned fillers.'**
   String get variantBDescription;
+
+  /// No description provided for @deleteSongTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete song?'**
+  String get deleteSongTitle;
+
+  /// No description provided for @deleteSongMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Remove “{title}” from your song list and delete its saved analysis? The audio file stays on your device.'**
+  String deleteSongMessage(String title);
+
+  /// No description provided for @slideToDelete.
+  ///
+  /// In en, this message translates to:
+  /// **'Slide to delete'**
+  String get slideToDelete;
+
+  /// No description provided for @deleteSongFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not delete the song. Please try again.'**
+  String get deleteSongFailed;
 }
 
 class _AppLocalizationsDelegate

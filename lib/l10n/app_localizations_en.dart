@@ -171,7 +171,8 @@ class AppLocalizationsEn extends AppLocalizations {
       'A tile overlapping the judgment line gives a PERFECT rating.';
 
   @override
-  String get singleTapPoint3 => 'A single tap clears the tile immediately.';
+  String get singleTapPoint3 =>
+      'Perfect earns 100%, Great 80%, Good 50% of the reward, including combo and hold bonuses.';
 
   @override
   String get holdTilesTitle => 'HOLD TILES';
@@ -273,4 +274,18 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get variantBDescription =>
       'Fixed tiles per 10 seconds, with beat-aligned fillers.';
+
+  @override
+  String get deleteSongTitle => 'Delete song?';
+
+  @override
+  String deleteSongMessage(String title) {
+    return 'Remove “$title” from your song list and delete its saved analysis? The audio file stays on your device.';
+  }
+
+  @override
+  String get slideToDelete => 'Slide to delete';
+
+  @override
+  String get deleteSongFailed => 'Could not delete the song. Please try again.';
 }

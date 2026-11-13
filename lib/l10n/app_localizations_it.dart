@@ -172,7 +172,8 @@ class AppLocalizationsIt extends AppLocalizations {
       'Una tessera sovrapposta alla linea dà una valutazione PERFECT.';
 
   @override
-  String get singleTapPoint3 => 'Un singolo tocco rimuove subito il tile.';
+  String get singleTapPoint3 =>
+      'Perfect assegna il 100%, Great l’80%, Good il 50% dei punti, inclusi i bonus combo e tenuta.';
 
   @override
   String get holdTilesTitle => 'TIENI PREMUTO I TILES';
@@ -276,4 +277,18 @@ class AppLocalizationsIt extends AppLocalizations {
   @override
   String get variantBDescription =>
       'Numero fisso di tessere ogni 10 secondi, integrate sul ritmo.';
+
+  @override
+  String get deleteSongTitle => 'Eliminare il brano?';
+
+  @override
+  String deleteSongMessage(String title) {
+    return 'Rimuovere “$title” dalla lista ed eliminare la sua analisi? Il file audio resta sul dispositivo.';
+  }
+
+  @override
+  String get slideToDelete => 'Scorri per eliminare';
+
+  @override
+  String get deleteSongFailed => 'Impossibile eliminare il brano. Riprova.';
 }

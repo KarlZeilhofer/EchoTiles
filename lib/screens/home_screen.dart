@@ -16,6 +16,7 @@ import '../services/storage_service.dart';
 import 'game_screen.dart';
 import 'how_to_play_screen.dart';
 import 'settings_screen.dart';
+import '../widgets/delete_song_dialog.dart';
 
 class HomeScreen extends StatefulWidget {
   final AppThemeData appTheme;
@@ -67,6 +68,33 @@ class _HomeScreenState extends State<HomeScreen> {
     try {
       await launchUrl(uri, mode: LaunchMode.externalApplication);
     } catch (_) {}
+  }
+
+  Future<void> _deleteSong(SongItem song) async {
+    if (_busy || _openingSong) return;
+    Haptics.select();
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (_) =>
+          DeleteSongDialog(songTitle: song.title, appTheme: widget.appTheme),
+    );
+    if (!mounted || confirmed != true) return;
+    setState(() => _busy = true);
+    try {
+      await AnalysisService.instance.remove(song);
+      await StorageService.removeCustomSong(song.id);
+      if (mounted) _loadData();
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(AppLocalizations.of(context).deleteSongFailed),
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
   }
 
   Future<SongAnalysis?> _analyzeSong(SongItem song) async {
@@ -690,16 +718,12 @@ class _HomeScreenState extends State<HomeScreen> {
                                             color: theme.textMuted,
                                             size: 22,
                                           ),
-                                          onPressed: () async {
-                                            Haptics.select();
-                                            await StorageService.removeCustomSong(
-                                              song.id,
-                                            );
-                                            await AnalysisService.instance
-                                                .remove(song);
-                                            _analyses.remove(song.id);
-                                            _loadData();
-                                          },
+                                          key: ValueKey('delete-${song.id}'),
+                                          tooltip: AppLocalizations.of(context)
+                                              .deleteSongTitle,
+                                          onPressed: _busy
+                                              ? null
+                                              : () => _deleteSong(song),
                                         ),
                                         const SizedBox(width: 4),
                                       ],

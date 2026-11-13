@@ -65,7 +65,7 @@
   "singleTapSubtitle": "Tap each tile right as it hits the bottom line.",
   "singleTapPoint1": "Tap the visible tile in its lane, just like the original F-Droid game.",
   "singleTapPoint2": "A tile overlapping the judgment line gives a PERFECT rating.",
-  "singleTapPoint3": "A single tap clears the tile immediately.",
+  "singleTapPoint3": "Perfect earns 100%, Great 80%, Good 50% of the reward, including combo and hold bonuses.",
   "holdTilesTitle": "HOLD TILES",
   "holdTilesSubtitle": "Identified by the circle head and straight line.",
   "holdTilesPoint1": "Hold tiles last between 1 and 4 seconds.",
@@ -95,5 +95,16 @@
   "variantA": "Variant A",
   "variantB": "Variant B",
   "variantADescription": "Previous note selection and acceleration.",
-  "variantBDescription": "Fixed tiles per 10 seconds, with beat-aligned fillers."
+  "variantBDescription": "Fixed tiles per 10 seconds, with beat-aligned fillers.",
+  "deleteSongTitle": "Delete song?",
+  "deleteSongMessage": "Remove “{title}” from your song list and delete its saved analysis? The audio file stays on your device.",
+  "slideToDelete": "Slide to delete",
+  "deleteSongFailed": "Could not delete the song. Please try again.",
+  "@deleteSongMessage": {
+    "placeholders": {
+      "title": {
+        "type": "String"
+      }
+    }
+  }
 }

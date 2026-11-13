@@ -11,6 +11,7 @@ import '../models/song_analysis.dart';
 import '../models/rhythm_timeline.dart';
 import '../models/playback_clock.dart';
 import '../models/tile_hit_test.dart';
+import '../models/score_rules.dart';
 import '../services/audio_service.dart';
 import '../services/haptics.dart';
 import '../services/storage_service.dart';
@@ -338,15 +339,10 @@ class _GameScreenState extends State<GameScreen>
       // note, not a disposable duplicate that needs another tap later.
     }
     final quality = TileHitTest.quality(tile, _targetLineFactor);
+    tile.hitQuality = quality;
     _combo++;
     _maxCombo = max(_maxCombo, _combo);
-    final points =
-        (quality == HitQuality.perfect
-            ? 100
-            : quality == HitQuality.great
-            ? 80
-            : 50) +
-        _combo * 2;
+    final points = ScoreRules.tap(quality, _combo);
     _score += points;
     _gold.begin(tile.id, points, Offset(tapX, tapY), holding: tile.isLong);
     if (tile.isLong) {
@@ -378,7 +374,9 @@ class _GameScreenState extends State<GameScreen>
     tile.holdScoredUntil = heldUntil;
     // Original live rewards, capped at the musical end. The completion bonus
     // is awarded separately, only after the player actually releases.
-    final points = tile.holdScoreRemainder + heldSeconds * 220;
+    final points =
+        tile.holdScoreRemainder +
+        heldSeconds * ScoreRules.holdRate(tile.hitQuality);
     final earned = (points + 1e-9).floor();
     _score += earned;
     _gold.add(tile.id, earned);
@@ -400,8 +398,9 @@ class _GameScreenState extends State<GameScreen>
     tile.isHit = true;
     tile.holdProgress = 1;
     _activeHolds.removeWhere((_, id) => id == tile.id);
-    _score += 150;
-    _gold.release(tile.id, bonus: 150);
+    final bonus = ScoreRules.completion(tile.hitQuality);
+    _score += bonus;
+    _gold.release(tile.id, bonus: bonus);
     _combo += 2;
     _maxCombo = max(_maxCombo, _combo);
     Haptics.medium();
@@ -453,8 +452,9 @@ class _GameScreenState extends State<GameScreen>
       tile.isHolding = false;
       tile.isHit = true;
       if (!cancelled && tile.holdProgress >= 0.85) {
-        _score += 100;
-        _gold.release(tile.id, bonus: 100);
+        final bonus = ScoreRules.earlyRelease(tile.hitQuality);
+        _score += bonus;
+        _gold.release(tile.id, bonus: bonus);
         Haptics.medium();
       } else {
         _gold.release(tile.id);
